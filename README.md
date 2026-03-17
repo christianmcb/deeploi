@@ -1,8 +1,22 @@
-# Deeploi
+# Deeploi &mdash; Deploy ML Models in Seconds 🚀
 
-One-line deployment for trained tabular ML models.
+[![PyPI version](https://img.shields.io/pypi/v/deeploi.svg)](https://pypi.org/project/deeploi/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-**Deeploi** = instant API for sklearn and XGBoost → no config, no boilerplate, no DevOps required.
+**Turn your trained tabular ML model into a production-ready API with a single line of code. No DevOps. No boilerplate. No headaches.**
+
+---
+
+## Why Deeploi?
+
+- **Instant API:** Serve your scikit-learn or XGBoost model as a blazing-fast REST API in one command.
+- **Zero Config:** No YAML, no Docker, no cloud lock-in. Just your model and your data.
+- **For Data Scientists:** Focus on modeling, not infrastructure.
+- **For Startups & Teams:** Ship ML features faster, without waiting for MLOps.
+- **Local-First:** Run anywhere—laptop, server, or cloud VM.
+
+---
+
+## Get Started in 10 Seconds
 
 ```python
 from deeploi import deploy
@@ -10,37 +24,26 @@ from deeploi import deploy
 deploy(model, sample=X_train)
 ```
 
-That's it. Your model is now serving predictions at `http://127.0.0.1:8000`.
+Your model is now live at `http://127.0.0.1:8000` with `/predict`, `/health`, and `/meta` endpoints.
+
+---
 
 ## Features
 
-✅ **Instant API**  
-One command launches a FastAPI server with `/predict`, `/health`, `/meta` endpoints.
+- ✅ **One-line deployment** for tabular models
+- ✅ **Automatic schema inference** from your training data
+- ✅ **Model packaging & versioning** for reproducibility
+- ✅ **Prediction probabilities** for classifiers
+- ✅ **Supports scikit-learn & XGBoost**
+- ✅ **No cloud or container required**
 
-✅ **Schema Inference**  
-Learns feature names, dtypes, order from your training sample.
-
-✅ **Artifact Packaging**  
-Save, version, and reload models with metadata.
-
-✅ **Prediction Probabilities**  
-Classification models get `/predict_proba` endpoint automatic.
-
-✅ **sklearn & XGBoost**  
-Classifiers and regressors, both frameworks.
-
-✅ **Local-First**  
-Run anywhere — no cloud, no containers, no registry.
+---
 
 ## Quick Start
-
-### Installation
 
 ```bash
 pip install deeploi
 ```
-
-### The One-Liner
 
 ```python
 from sklearn.datasets import load_iris
@@ -49,15 +52,85 @@ from deeploi import deploy
 
 iris = load_iris(as_frame=True)
 X, y = iris.data, iris.target
-
-model = RandomForestClassifier(n_estimators=10).fit(X, y)
-
+model = RandomForestClassifier().fit(X, y)
 deploy(model, sample=X)
 ```
 
-Server starts at `http://127.0.0.1:8000`.
+---
 
-### Test It
+## How It Works
+
+1. **Train your model** as usual.
+2. **Deploy instantly** with `deploy(model, sample=X_train)`.
+3. **Call your API** for predictions.
+
+---
+
+## API Endpoints
+
+- `POST /predict` — Get predictions
+- `POST /predict_proba` — Get class probabilities (classifiers)
+- `GET /meta` — Model metadata
+- `GET /health` — Health check
+
+---
+
+## Save, Load, and Reuse
+
+```python
+from deeploi import package, load
+
+pkg = package(model, X_train)
+pkg.save("artifacts/v1")
+pkg = load("artifacts/v1")
+preds = pkg.predict(X_test)
+```
+
+---
+
+## Who is Deeploi for?
+
+- Data scientists who want to demo or share models instantly
+- ML engineers who need fast, local serving for tabular models
+- Startups and teams who want to skip MLOps complexity
+
+---
+
+## Advanced Usage
+
+### Three Core Functions
+
+#### 1. `deploy()` — One-liner, immediate serving
+
+```python
+from deeploi import deploy
+
+deploy(model, sample=X_train, host="127.0.0.1", port=8000)
+```
+
+#### 2. `package()` — Reusable object
+
+```python
+from deeploi import package
+
+pkg = package(model, sample=X_train)
+preds = pkg.predict(X_test)
+pkg.save("artifacts/iris_rf")
+pkg.serve(port=8000)
+```
+
+#### 3. `load()` — Reload saved artifacts
+
+```python
+from deeploi import load
+
+pkg = load("artifacts/iris_rf")
+preds = pkg.predict(X_test)
+```
+
+---
+
+## Example: Test the API
 
 ```bash
 curl -X POST http://127.0.0.1:8000/predict \
@@ -84,115 +157,7 @@ Response:
 }
 ```
 
-## Core API
-
-### Three Functions
-
-#### 1. `deploy()` — One-liner, immediate serving
-
-```python
-from deeploi import deploy
-
-deploy(model, sample=X_train, host="127.0.0.1", port=8000)
-```
-
-Infers schema → packages model → starts server (blocking).
-
-#### 2. `package()` — Reusable object
-
-```python
-from deeploi import package
-
-pkg = package(model, sample=X_train)
-
-# Use it
-preds = pkg.predict(X_test)
-
-# or save it
-pkg.save("artifacts/iris_rf")
-
-# or serve it later
-pkg.serve(port=8000)
-```
-
-#### 3. `load()` — Reload saved artifacts
-
-```python
-from deeploi import load
-
-pkg = load("artifacts/iris_rf")
-preds = pkg.predict(X_test)
-```
-
-## Endpoints
-
-### `GET /health`
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-```json
-{
-  "status": "ok",
-  "version": "0.1.0"
-}
-```
-
-### `GET /meta`
-
-```bash
-curl http://127.0.0.1:8000/meta
-```
-
-```json
-{
-  "framework": "sklearn",
-  "estimator_class": "RandomForestClassifier",
-  "task_type": "classification",
-  "supports_predict_proba": true,
-  "python_version": "3.11.0",
-  "deeploi_version": "0.1.0",
-  "created_at": "2026-03-17T12:00:00Z"
-}
-```
-
-### `POST /predict`
-
-```bash
-curl -X POST http://127.0.0.1:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"records": [{"col_1": 1.0, "col_2": 2.0}]}'
-```
-
-**Regression response:**
-```json
-{
-  "predictions": [123.45, 118.91],
-  "probabilities": null
-}
-```
-
-**Classification response:**
-```json
-{
-  "predictions": [0, 1],
-  "probabilities": [
-    {"0": 0.91, "1": 0.09},
-    {"0": 0.12, "1": 0.88}
-  ]
-}
-```
-
-### `POST /predict_proba`
-
-Classification models only. Same as `/predict` with probabilities.
-
-```bash
-curl -X POST http://127.0.0.1:8000/predict_proba \
-  -H "Content-Type: application/json" \
-  -d '{"records": [{"col_1": 1.0, "col_2": 2.0}]}'
-```
+---
 
 ## Artifact Structure
 
@@ -207,87 +172,7 @@ path/to/artifact/
 └── requirements.txt       # Dependencies
 ```
 
-**metadata.json:**
-```json
-{
-  "framework": "sklearn",
-  "estimator_class": "RandomForestClassifier",
-  "task_type": "classification",
-  "supports_predict_proba": true,
-  "created_at": "2026-03-17T12:00:00Z",
-  "python_version": "3.11.0",
-  "deeploi_version": "0.1.0",
-  "library_versions": {
-    "sklearn": "1.5.0",
-    "xgboost": "2.0.0",
-    "pandas": "2.0.0"
-  }
-}
-```
-
-**schema.json:**
-```json
-{
-  "features": [
-    {"name": "sepal length (cm)", "dtype": "float64", "nullable": false},
-    {"name": "sepal width (cm)", "dtype": "float64", "nullable": false},
-    {"name": "petal length (cm)", "dtype": "float64", "nullable": false},
-    {"name": "petal width (cm)", "dtype": "float64", "nullable": false}
-  ],
-  "column_order": [
-    "sepal length (cm)",
-    "sepal width (cm)",
-    "petal length (cm)",
-    "petal width (cm)"
-  ]
-}
-```
-
-## Examples
-
-### Scikit-learn Regressor
-
-```python
-from sklearn.datasets import load_diabetes
-from sklearn.ensemble import RandomForestRegressor
-from deeploi import package
-
-X, y = load_diabetes(return_X_y=True, as_frame=True)
-model = RandomForestRegressor().fit(X, y)
-
-pkg = package(model, X)
-preds = pkg.predict(X[:5])
-print(preds.to_json())
-```
-
-### XGBoost Classifier
-
-```python
-import pandas as pd
-import xgboost as xgb
-from deeploi import deploy
-
-df = pd.read_csv("data.csv")
-X = df.drop("target", axis=1)
-y = df["target"]
-
-model = xgb.XGBClassifier().fit(X, y)
-
-deploy(model, sample=X, port=9000)
-```
-
-### Save & Load
-
-```python
-from deeploi import package, load
-
-pkg = package(model, X_train)
-pkg.save("artifacts/v1")
-
-# Later...
-pkg = load("artifacts/v1")
-preds = pkg.predict(X_test)
-```
+---
 
 ## Error Handling
 
@@ -301,6 +186,8 @@ except UnsupportedModelError:
 except InvalidSampleError:
     print("Sample must be a non-empty DataFrame")
 ```
+
+---
 
 ## What's in v0.1.0
 
@@ -322,6 +209,8 @@ except InvalidSampleError:
 - Model registry
 - Monitoring
 
+---
+
 ## Requirements
 
 - Python 3.8+
@@ -331,17 +220,15 @@ except InvalidSampleError:
 - fastapi >= 0.68
 - uvicorn >= 0.15
 
+---
+
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+MIT &mdash; see [LICENSE](./LICENSE).
 
 ---
 
-**Next Steps:**
-
-1. Try the [Iris example](examples/sklearn_classifier.py)
-2. Package your own model
-3. Deploy locally
-4. Hit `/predict`
+**Ready to deploy your model?**  
+Try the [examples](examples/) or run `pip install deeploi` now!
 
 Questions? Open an issue on [GitHub](https://github.com/deeploi/deeploi).
