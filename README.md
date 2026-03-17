@@ -45,6 +45,7 @@ Your model is now live at `http://127.0.0.1:8000` with `/predict`, `/health`, an
 ---
 
 ## Quick Start
+Python >= 3.10 Required.
 
 ```bash
 pip install deeploi
