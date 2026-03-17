@@ -1,0 +1,17 @@
+{
+  "framework": "xgboost",
+  "estimator_class": "XGBClassifier",
+  "problem_type": "classification",
+  "task_type": "classification",
+  "supports_predict_proba": true,
+  "created_at": "2026-03-17T11:45:51.036034Z",
+  "python_version": "3.12.4",
+  "deeploi_version": "0.1.0",
+  "library_versions": {
+    "pandas": "2.2.2",
+    "sklearn": "1.4.2",
+    "xgboost": "3.2.0",
+    "fastapi": "0.135.1",
+    "pydantic": "2.12.5"
+  }
+}

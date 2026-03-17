@@ -1,0 +1,66 @@
+{
+  "features": [
+    {
+      "name": "age",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "sex",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "bmi",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "bp",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "s1",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "s2",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "s3",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "s4",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "s5",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "s6",
+      "dtype": "float64",
+      "nullable": "False"
+    }
+  ],
+  "column_order": [
+    "age",
+    "sex",
+    "bmi",
+    "bp",
+    "s1",
+    "s2",
+    "s3",
+    "s4",
+    "s5",
+    "s6"
+  ]
+}

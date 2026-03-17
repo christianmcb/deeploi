@@ -1,0 +1,186 @@
+{
+  "features": [
+    {
+      "name": "mean radius",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean texture",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean perimeter",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean area",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean smoothness",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean compactness",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean concavity",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean concave points",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean symmetry",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "mean fractal dimension",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "radius error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "texture error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "perimeter error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "area error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "smoothness error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "compactness error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "concavity error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "concave points error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "symmetry error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "fractal dimension error",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst radius",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst texture",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst perimeter",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst area",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst smoothness",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst compactness",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst concavity",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst concave points",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst symmetry",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "worst fractal dimension",
+      "dtype": "float64",
+      "nullable": "False"
+    }
+  ],
+  "column_order": [
+    "mean radius",
+    "mean texture",
+    "mean perimeter",
+    "mean area",
+    "mean smoothness",
+    "mean compactness",
+    "mean concavity",
+    "mean concave points",
+    "mean symmetry",
+    "mean fractal dimension",
+    "radius error",
+    "texture error",
+    "perimeter error",
+    "area error",
+    "smoothness error",
+    "compactness error",
+    "concavity error",
+    "concave points error",
+    "symmetry error",
+    "fractal dimension error",
+    "worst radius",
+    "worst texture",
+    "worst perimeter",
+    "worst area",
+    "worst smoothness",
+    "worst compactness",
+    "worst concavity",
+    "worst concave points",
+    "worst symmetry",
+    "worst fractal dimension"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "framework": "sklearn",
+  "estimator_class": "RandomForestRegressor",
+  "problem_type": "regression",
+  "task_type": "regression",
+  "supports_predict_proba": false,
+  "created_at": "2026-03-17T11:44:27.695738Z",
+  "python_version": "3.12.4",
+  "deeploi_version": "0.1.0",
+  "library_versions": {
+    "pandas": "2.2.2",
+    "sklearn": "1.4.2",
+    "xgboost": "3.2.0",
+    "fastapi": "0.135.1",
+    "pydantic": "2.12.5"
+  }
+}

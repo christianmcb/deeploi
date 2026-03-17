@@ -1,0 +1,30 @@
+{
+  "features": [
+    {
+      "name": "sepal length (cm)",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "sepal width (cm)",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "petal length (cm)",
+      "dtype": "float64",
+      "nullable": "False"
+    },
+    {
+      "name": "petal width (cm)",
+      "dtype": "float64",
+      "nullable": "False"
+    }
+  ],
+  "column_order": [
+    "sepal length (cm)",
+    "sepal width (cm)",
+    "petal length (cm)",
+    "petal width (cm)"
+  ]
+}
