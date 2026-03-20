@@ -2,7 +2,7 @@
 Constants for Deeploi.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Supported frameworks
 SKLEARN = "sklearn"
@@ -26,6 +26,9 @@ METADATA_FILE = "metadata.json"
 SCHEMA_FILE = "schema.json"
 MANIFEST_FILE = "deeploi.json"
 REQUIREMENTS_FILE = "requirements.txt"
+DOCKERFILE_FILE = "Dockerfile"
+DOCKERIGNORE_FILE = ".dockerignore"
+DOCKER_APP_FILE = "serve.py"
 
 # Default serving config
 DEFAULT_HOST = "127.0.0.1"
@@ -41,3 +44,8 @@ HEALTH_ENDPOINT = "/health"
 METADATA_ENDPOINT = "/meta"
 PREDICT_ENDPOINT = "/predict"
 PREDICT_PROBA_ENDPOINT = "/predict_proba"
+
+# Package name mappings (internal name -> PyPI package name)
+PACKAGE_NAME_MAPPING = {
+    "sklearn": "scikit-learn",
+}

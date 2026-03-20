@@ -1,4 +1,3 @@
-
 # Deeploi &mdash; Deploy ML Models in Seconds 🚀
 
 <p align="center">
@@ -9,46 +8,20 @@
 
 **Turn your trained tabular ML model into a production-ready API with a single line of code. No DevOps. No boilerplate. No headaches.**
 
----
-
 ## Why Deeploi?
 
-- **Instant API:** Serve your scikit-learn or XGBoost model as a blazing-fast REST API in one command.
-- **Zero Config:** No YAML, no Docker, no cloud lock-in. Just your model and your data.
-- **For Data Scientists:** Focus on modeling, not infrastructure.
-- **For Startups & Teams:** Ship ML features faster, without waiting for MLOps.
-- **Local-First:** Run anywhere—laptop, server, or cloud VM.
+- **Instant API:** Serve your scikit-learn or XGBoost model in one command.
+- **Zero Config:** No YAML, no Docker, no cloud lock-in.
+- **Local-First:** Run on your laptop, server, or VM.
+- **Built for ML work:** Focus on the model, not the serving stack.
 
----
-
-## Get Started in 10 Seconds
-
-```python
-from deeploi import deploy
-
-deploy(model, sample=X_train)
-```
-
-Your model is now live at `http://127.0.0.1:8000` with `/predict`, `/health`, and `/meta` endpoints.
-
----
-
-## Features
-
-- ✅ **One-line deployment** for tabular models
-- ✅ **Automatic schema inference** from your training data
-- ✅ **Model packaging & versioning** for reproducibility
-- ✅ **Prediction probabilities** for classifiers
-- ✅ **Supports scikit-learn & XGBoost**
-- ✅ **No cloud or container required**
-
----
-
-## Quick Start
+## Install
 
 ```bash
 pip install deeploi
 ```
+
+## Fastest Start
 
 ```python
 from sklearn.datasets import load_iris
@@ -57,85 +30,26 @@ from deeploi import deploy
 
 iris = load_iris(as_frame=True)
 X, y = iris.data, iris.target
-model = RandomForestClassifier().fit(X, y)
-deploy(model, sample=X)
+model = RandomForestClassifier(random_state=42).fit(X, y)
+
+deploy(model)
 ```
 
----
+Your model is now live at `http://127.0.0.1:8000`.
 
-## How It Works
+## Most Important Ways to Access Deeploi
 
-1. **Train your model** as usual.
-2. **Deploy instantly** with `deploy(model, sample=X_train)`.
-3. **Call your API** for predictions.
+### 1. Open the dashboard
 
----
+Open this in your browser:
 
-## API Endpoints
-
-- `POST /predict` — Get predictions
-- `POST /predict_proba` — Get class probabilities (classifiers)
-- `GET /meta` — Model metadata
-- `GET /health` — Health check
-
----
-
-## Save, Load, and Reuse
-
-```python
-from deeploi import package, load
-
-pkg = package(model, X_train)
-pkg.save("artifacts/v1")
-pkg = load("artifacts/v1")
-preds = pkg.predict(X_test)
+```text
+http://127.0.0.1:8000/
 ```
 
----
+The dashboard gives you a quick way to inspect metadata, test endpoints, and send prediction requests.
 
-## Who is Deeploi for?
-
-- Data scientists who want to demo or share models instantly
-- ML engineers who need fast, local serving for tabular models
-- Startups and teams who want to skip MLOps complexity
-
----
-
-## Advanced Usage
-
-### Three Core Functions
-
-#### 1. `deploy()` — One-liner, immediate serving
-
-```python
-from deeploi import deploy
-
-deploy(model, sample=X_train, host="127.0.0.1", port=8000)
-```
-
-#### 2. `package()` — Reusable object
-
-```python
-from deeploi import package
-
-pkg = package(model, sample=X_train)
-preds = pkg.predict(X_test)
-pkg.save("artifacts/iris_rf")
-pkg.serve(port=8000)
-```
-
-#### 3. `load()` — Reload saved artifacts
-
-```python
-from deeploi import load
-
-pkg = load("artifacts/iris_rf")
-preds = pkg.predict(X_test)
-```
-
----
-
-## Example: Test the API
+### 2. Call the prediction API directly
 
 ```bash
 curl -X POST http://127.0.0.1:8000/predict \
@@ -152,88 +66,74 @@ curl -X POST http://127.0.0.1:8000/predict \
   }'
 ```
 
-Response:
-```json
-{
-  "predictions": [0],
-  "probabilities": [
-    {"0": 0.91, "1": 0.09}
-  ]
-}
-```
+Core endpoints:
 
----
+- `POST /predict`
+- `POST /predict_proba`
+- `GET /meta`
+- `GET /health`
 
-## Artifact Structure
-
-When you call `pkg.save("path/to/artifact")`, you get:
-
-```
-path/to/artifact/
-├── model.joblib           # Serialized model
-├── metadata.json          # Versions, task type, timestamps
-├── schema.json            # Features, dtypes, column order
-├── deeploi.json           # Manifest
-└── requirements.txt       # Dependencies
-```
-
----
-
-## Error Handling
+### 3. Work with a reusable package object
 
 ```python
-from deeploi import package, UnsupportedModelError, InvalidSampleError
+from deeploi import package
 
-try:
-    pkg = package(my_model, my_sample)
-except UnsupportedModelError:
-    print("Only sklearn and XGBoost are supported")
-except InvalidSampleError:
-    print("Sample must be a non-empty DataFrame")
+pkg = package(model)
+preds = pkg.predict(X.head())
+pkg.serve(port=8000)
 ```
 
----
+Use this when you want a Python object you can predict with, save, and serve explicitly.
 
-## What's in v0.1.0
+### 4. Save and reload a model artifact
 
-**Supported:**
-- sklearn classifiers and regressors
-- XGBoost classifiers and regressors
-- pandas DataFrame inputs
-- Local FastAPI serving
-- Model save/load
-- Schema inference
-- Prediction probabilities (classifiers)
+```python
+from deeploi import package, load
 
-**Not in v0.1.0:**
-- S3 / cloud storage
-- Docker generation
-- Authentication
-- Batch inference
-- Async workers
-- Model registry
-- Monitoring
+pkg = package(model)
+pkg.save("artifacts/iris_rf")
 
----
+loaded = load("artifacts/iris_rf")
+loaded.serve(port=8000)
+```
 
-## Requirements
+Use this when you want a portable artifact directory you can reload later.
 
-- Python 3.8+
-- pandas >= 1.0
-- scikit-learn >= 0.24
-- xgboost >= 1.0
-- fastapi >= 0.68
-- uvicorn >= 0.15
+## Docker Artifact Generation
 
----
+Use Docker generation when you want a saved artifact that is easy to move onto another machine or run in a container.
+
+```python
+from deeploi import package
+
+pkg = package(model)
+pkg.save("artifacts/iris_rf", generate_docker=True)
+```
+
+Then build and run it:
+
+```bash
+cd artifacts/iris_rf
+docker build -t iris-model .
+docker run --rm -p 8000:8000 iris-model
+```
+
+## Who is Deeploi for?
+
+- Data scientists who want to share a model quickly
+- ML engineers who need fast local serving for tabular models
+- Teams that want a lightweight path from notebook to API
+
+## Learn More
+
+See [DOCS.md](./DOCS.md) for:
+
+- advanced `deploy`, `package`, and `load` usage
+- environment-based authentication
+- Docker artifact generation
+- artifact layout
+- error handling and testing examples
 
 ## License
 
 MIT &mdash; see [LICENSE](./LICENSE).
-
----
-
-**Ready to deploy your model?**  
-Try the [examples](examples/) or run `pip install deeploi` now!
-
-Questions? Open an issue on [GitHub](https://github.com/deeploi/deeploi).

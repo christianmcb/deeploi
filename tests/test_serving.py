@@ -276,3 +276,132 @@ class TestRegressionEndpoint:
         assert "predictions" in data
         assert len(data["predictions"]) == 1
         assert isinstance(data["predictions"][0], (int, float))
+
+
+class TestAuthentication:
+    """Test optional API key auth behavior."""
+
+    @pytest.fixture
+    def payload(self):
+        """Prediction payload for iris model."""
+        return {
+            "records": [
+                {
+                    "sepal length (cm)": 5.1,
+                    "sepal width (cm)": 3.5,
+                    "petal length (cm)": 1.4,
+                    "petal width (cm)": 0.2,
+                }
+            ]
+        }
+
+    @pytest.fixture
+    def base_package(self):
+        """Create a packaged classifier."""
+        iris = load_iris(as_frame=True)
+        X, y = iris.data, iris.target
+
+        model = RandomForestClassifier(n_estimators=5, random_state=42)
+        model.fit(X, y)
+        return package(model, X)
+
+    def test_predict_default_no_auth(self, base_package, payload):
+        """By default, auth is disabled and prediction is open."""
+        app = create_app(base_package)
+        client = TestClient(app)
+
+        response = client.post("/predict", json=payload)
+        assert response.status_code == 200
+
+    def test_predict_requires_auth_when_explicitly_enabled(self, base_package, payload):
+        """Explicit auth requires a valid API key header."""
+        app = create_app(base_package, require_auth=True, api_key="secret-key")
+        client = TestClient(app)
+
+        missing_key = client.post("/predict", json=payload)
+        wrong_key = client.post(
+            "/predict",
+            json=payload,
+            headers={"X-API-Key": "wrong-key"},
+        )
+        valid_key = client.post(
+            "/predict",
+            json=payload,
+            headers={"X-API-Key": "secret-key"},
+        )
+
+        assert missing_key.status_code == 401
+        assert wrong_key.status_code == 401
+        assert valid_key.status_code == 200
+
+    def test_predict_uses_environment_auth_settings(self, base_package, payload, monkeypatch):
+        """Auth can be enabled per environment via env vars."""
+        monkeypatch.setenv("DEEPLOI_AUTH_ENABLED", "true")
+        monkeypatch.setenv("DEEPLOI_AUTH_API_KEY", "env-secret")
+        monkeypatch.setenv("DEEPLOI_AUTH_HEADER", "X-Model-Key")
+
+        app = create_app(base_package)
+        client = TestClient(app)
+
+        missing_key = client.post("/predict", json=payload)
+        wrong_key = client.post(
+            "/predict",
+            json=payload,
+            headers={"X-Model-Key": "wrong"},
+        )
+        valid_key = client.post(
+            "/predict",
+            json=payload,
+            headers={"X-Model-Key": "env-secret"},
+        )
+
+        assert missing_key.status_code == 401
+        assert wrong_key.status_code == 401
+        assert valid_key.status_code == 200
+
+    def test_dashboard_requires_key_when_auth_enabled(self, base_package):
+        """Dashboard root is protected when auth is enabled."""
+        app = create_app(base_package, require_auth=True, api_key="secret-key")
+        client = TestClient(app)
+
+        missing_key = client.get("/")
+        valid_query_key = client.get("/?api_key=secret-key")
+
+        assert missing_key.status_code == 401
+        assert valid_query_key.status_code == 200
+        assert "__DEEPLOI_CONFIG__" in valid_query_key.text
+
+    def test_dashboard_accepts_header_auth(self, base_package):
+        """Dashboard can also be opened with the configured auth header."""
+        app = create_app(base_package, require_auth=True, api_key="secret-key")
+        client = TestClient(app)
+
+        response = client.get("/", headers={"X-API-Key": "secret-key"})
+
+        assert response.status_code == 200
+        assert '"authEnabled": true' in response.text
+
+    def test_auth_enabled_without_key_auto_generates(self, base_package, monkeypatch):
+        """Enabled auth without a key auto-generates a secure key by default."""
+        monkeypatch.setenv("DEEPLOI_AUTH_ENABLED", "true")
+        monkeypatch.delenv("DEEPLOI_AUTH_API_KEY", raising=False)
+
+        app = create_app(base_package)
+        generated = app.state.generated_api_key
+
+        assert app.state.auth_enabled is True
+        assert isinstance(generated, str)
+        assert len(generated) >= 32
+
+    def test_auth_enabled_without_key_raises_when_auto_generate_disabled(
+        self,
+        base_package,
+        monkeypatch,
+    ):
+        """Strict mode still fails fast when no key is provided."""
+        monkeypatch.setenv("DEEPLOI_AUTH_ENABLED", "true")
+        monkeypatch.setenv("DEEPLOI_AUTH_AUTO_GENERATE", "false")
+        monkeypatch.delenv("DEEPLOI_AUTH_API_KEY", raising=False)
+
+        with pytest.raises(ValueError, match="Authentication is enabled"):
+            create_app(base_package)

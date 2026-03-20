@@ -15,14 +15,14 @@ from deeploi.loader import load as load_artifact
 
 def package(
     model: Any,
-    sample: pd.DataFrame,
+    sample: Optional[pd.DataFrame] = None,
 ) -> DeeploiPackage:
     """
     Create a reusable DeeploiPackage from a trained model.
     
     Args:
         model: Trained scikit-learn or XGBoost model
-        sample: Sample DataFrame with feature columns for schema inference
+        sample: Optional sample DataFrame with feature columns for schema inference
     
     Returns:
         DeeploiPackage instance
@@ -41,9 +41,13 @@ def package(
 
 def deploy(
     model: Any,
-    sample: pd.DataFrame,
+    sample: Optional[pd.DataFrame] = None,
     host: str = "127.0.0.1",
     port: int = 8000,
+    require_auth: Optional[bool] = None,
+    api_key: Optional[str] = None,
+    auth_header_name: Optional[str] = None,
+    auto_generate_api_key: Optional[bool] = None,
 ) -> None:
     """
     One-liner to deploy a trained model as a local API.
@@ -52,9 +56,17 @@ def deploy(
     
     Args:
         model: Trained scikit-learn or XGBoost model
-        sample: Sample DataFrame with feature columns
+        sample: Optional sample DataFrame with feature columns
         host: Host to bind to (default: 127.0.0.1)
         port: Port to bind to (default: 8000)
+        require_auth: Whether to require API key auth. If None, uses
+            DEEPLOI_AUTH_ENABLED.
+        api_key: API key value. If None, uses DEEPLOI_AUTH_API_KEY.
+        auth_header_name: Header name for API key. If None, uses
+            DEEPLOI_AUTH_HEADER (default: X-API-Key).
+        auto_generate_api_key: Whether to auto-generate an API key when auth
+            is enabled and no key is provided. If None, uses
+            DEEPLOI_AUTH_AUTO_GENERATE (default: True).
     
     Example:
         >>> from sklearn.ensemble import RandomForestClassifier
@@ -66,7 +78,14 @@ def deploy(
         # Try: curl -X POST http://127.0.0.1:8000/predict ...
     """
     pkg = package(model, sample)
-    pkg.serve(host=host, port=port)
+    pkg.serve(
+        host=host,
+        port=port,
+        require_auth=require_auth,
+        api_key=api_key,
+        auth_header_name=auth_header_name,
+        auto_generate_api_key=auto_generate_api_key,
+    )
 
 
 def load(path: str) -> DeeploiPackage:

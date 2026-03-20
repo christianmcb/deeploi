@@ -20,6 +20,7 @@ Or for more control:
 """
 
 from deeploi.api import deploy, package, load
+from deeploi.constants import __version__
 from deeploi.package import DeeploiPackage
 from deeploi.exceptions import (
     DeeploiError,
@@ -30,8 +31,6 @@ from deeploi.exceptions import (
     PredictionError,
     SerializationError,
 )
-
-__version__ = "0.1.0"
 
 __all__ = [
     # Public API

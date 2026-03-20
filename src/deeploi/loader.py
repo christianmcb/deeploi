@@ -10,6 +10,7 @@ from deeploi.serialization import load_model
 from deeploi.utils import load_json
 from deeploi.exceptions import ArtifactLoadError
 from deeploi.constants import (
+    __version__,
     MODEL_FILE,
     METADATA_FILE,
     SCHEMA_FILE,
@@ -40,7 +41,7 @@ def load(path: str) -> DeeploiPackage:
             manifest = load_json(manifest_path)
         else:
             # Create manifest for backward compat
-            manifest = {"deeploi_version": "0.1.0"}
+            manifest = {"deeploi_version": __version__}
         
         # Load model
         model_path = os.path.join(path, MODEL_FILE)

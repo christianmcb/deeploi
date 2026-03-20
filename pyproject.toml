@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deeploi"
-version = "0.1.0"
+version = "0.2.0"
 description = "One-line deployment for trained tabular ML models"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -51,13 +51,17 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/deeploi/deeploi"
 Repository = "https://github.com/deeploi/deeploi.git"
-Documentation = "https://github.com/deeploi/deeploi#readme"
+Documentation = "https://github.com/deeploi/deeploi/blob/main/DOCS.md"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+include-package-data = true
 
 [tool.setuptools.packages]
 find = {where = ["src"]}
+
+[tool.setuptools.package-data]
+deeploi = ["dashboard.html"]
 
 [tool.black]
 line-length = 100

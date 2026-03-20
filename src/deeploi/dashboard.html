@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deeploi — API Dashboard</title>
+  <meta name="description" content="Interactive API playground and evaluation dashboard for your Deeploi-deployed model." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ─── Reset & tokens ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0a0a0f;
+      --bg2:      #0f0f1a;
+      --surface:  #141428;
+      --surface2: #1a1a2e;
+      --border:   rgba(120,100,255,.18);
+      --border2:  rgba(120,100,255,.3);
+      --accent:   #7c6bff;
+      --accent2:  #a78bfa;
+      --accent3:  #38bdf8;
+      --green:    #34d399;
+      --red:      #f87171;
+      --yellow:   #fbbf24;
+      --text:     #e2e8f0;
+      --muted:    #94a3b8;
+      --faint:    #475569;
+      --radius:   10px;
+      --sidebar:  260px;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    code, .mono { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+
+    /* ─── Layout ─────────────────────────────────────────────────── */
+    #layout { display: flex; flex: 1; height: 100vh; overflow: hidden; }
+
+    /* ─── Sidebar ────────────────────────────────────────────────── */
+    #sidebar {
+      width: var(--sidebar);
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto; flex-shrink: 0;
+    }
+    .sidebar-logo {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-logo-text {
+      font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 30%, var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .sidebar-logo-sub {
+      font-size: 0.68rem; color: var(--faint); font-weight: 500;
+      letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px;
+    }
+    .nav-section { padding: 18px 12px 6px; }
+    .nav-section-label {
+      font-size: 0.67rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--faint);
+      padding: 0 8px; margin-bottom: 6px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 7px;
+      cursor: pointer; transition: background .15s, color .15s;
+      font-size: 0.86rem; font-weight: 500; color: var(--muted);
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .nav-item:hover { background: rgba(255,255,255,.04); color: var(--text); }
+    .nav-item.active { background: rgba(124,107,255,.15); color: var(--accent2); }
+    .nav-item .icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
+
+    .connection-area { padding: 14px 20px; margin-top: auto; border-top: 1px solid var(--border); }
+    .status-dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; background: var(--faint); flex-shrink: 0;
+    }
+    .status-dot.online  { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-dot.offline { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+    .status-dot.checking { background: var(--yellow); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ─── Main content ───────────────────────────────────────────── */
+    #main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+    /* ─── Top bar ────────────────────────────────────────────────── */
+    #topbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 24px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0; flex-wrap: wrap;
+    }
+    #topbar h1 { font-size: 1.05rem; font-weight: 700; flex: 1; min-width: 140px; }
+    .url-bar {
+      display: flex; align-items: center;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px; overflow: hidden;
+      flex: 1; min-width: 220px; max-width: 380px;
+    }
+    .url-bar label {
+      padding: 0 12px;
+      font-size: 0.75rem; font-weight: 600; color: var(--faint);
+      white-space: nowrap; background: rgba(255,255,255,.03);
+      border-right: 1px solid var(--border);
+      height: 100%; display: flex; align-items: center;
+    }
+    #base-url {
+      flex: 1; background: none; border: none; outline: none;
+      color: var(--text); font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem; padding: 8px 10px;
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px;
+      font-family: 'Inter', sans-serif; font-size: 0.83rem; font-weight: 600;
+      cursor: pointer; border: none; transition: opacity .15s, transform .12s;
+    }
+    .btn:hover { transform: translateY(-1px); opacity: .9; }
+    .btn:active { transform: none; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); }
+    .btn-red { background: rgba(248,113,113,.15); color: var(--red); border: 1px solid rgba(248,113,113,.3); }
+    .btn-sm { padding: 5px 11px; font-size: 0.77rem; }
+
+    /* ─── Pages ──────────────────────────────────────────────────── */
+    .page { display: none; flex: 1; flex-direction: column; padding: 24px; gap: 20px; }
+    .page.active { display: flex; }
+
+    /* ─── Cards ──────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,.02);
+    }
+    .card-title { font-size: 0.88rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .card-body  { padding: 18px; }
+
+    /* ─── Stat grid ──────────────────────────────────────────────── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 14px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .stat-label { font-size: 0.75rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+    .stat-value { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em; }
+    .stat-sub   { font-size: 0.78rem; color: var(--muted); }
+
+    /* ─── Two-col ────────────────────────────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* ─── Meta table ─────────────────────────────────────────────── */
+    .meta-table { width: 100%; border-collapse: collapse; }
+    .meta-table tr + tr td { border-top: 1px solid var(--border); }
+    .meta-table td { padding: 9px 12px; font-size: 0.84rem; vertical-align: top; }
+    .meta-table td:first-child { color: var(--faint); font-weight: 600; width: 40%; }
+    .meta-table td code { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--accent2); }
+
+    /* ─── Playground ─────────────────────────────────────────────── */
+    .endpoint-selector { display: flex; gap: 8px; flex-wrap: wrap; }
+    .endpoint-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 16px; border-radius: 8px;
+      font-family: 'Inter', sans-serif; font-size: 0.83rem; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+    }
+    .endpoint-btn.active { background: rgba(124,107,255,.15); border-color: var(--border2); color: var(--accent2); }
+    .endpoint-btn:hover:not(.active) { color: var(--text); }
+    .method-badge {
+      font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; font-weight: 700;
+      padding: 2px 7px; border-radius: 4px;
+    }
+    .badge-post { background: rgba(52,211,153,.12); color: var(--green); border: 1px solid rgba(52,211,153,.25); }
+    .badge-get  { background: rgba(56,189,248,.12); color: var(--accent3); border: 1px solid rgba(56,189,248,.25); }
+
+    .code-editor {
+      width: 100%; min-height: 200px;
+      background: var(--bg); color: #c9d1d9;
+      border: 1px solid var(--border); border-radius: 8px; padding: 14px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.75;
+      resize: vertical; outline: none; transition: border-color .15s;
+    }
+    .code-editor:focus { border-color: var(--border2); }
+
+    .response-box {
+      min-height: 200px; max-height: 480px; overflow-y: auto;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px; font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem; line-height: 1.75; white-space: pre-wrap; word-break: break-all;
+    }
+    .response-box.success { border-color: rgba(52,211,153,.3); }
+    .response-box.error   { border-color: rgba(248,113,113,.3); }
+
+    .resp-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.78rem; font-weight: 600;
+      padding: 3px 10px; border-radius: 5px; font-family: 'JetBrains Mono', monospace;
+    }
+    .resp-status.ok  { background: rgba(52,211,153,.12); color: var(--green); }
+    .resp-status.err { background: rgba(248,113,113,.12); color: var(--red); }
+
+    .form-input {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 7px 10px;
+      color: var(--text); font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem; outline: none; width: 100%; transition: border-color .15s;
+    }
+    .form-input:focus { border-color: var(--border2); }
+
+    /* ─── History table ──────────────────────────────────────────── */
+    .history-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .history-table th {
+      text-align: left; padding: 9px 12px;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--faint); background: rgba(255,255,255,.02); border-bottom: 1px solid var(--border);
+    }
+    .history-table td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+    .history-table tr:hover td { background: rgba(255,255,255,.02); }
+    .pred-chip {
+      display: inline-block; padding: 2px 9px; border-radius: 5px;
+      background: rgba(124,107,255,.12); color: var(--accent2);
+      border: 1px solid rgba(124,107,255,.25);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 600;
+    }
+
+    /* ─── Charts ─────────────────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* ─── Schema list ────────────────────────────────────────────── */
+    .schema-list { display: flex; flex-direction: column; gap: 6px; }
+    .schema-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 7px; font-size: 0.82rem;
+    }
+    .schema-name { font-family: 'JetBrains Mono', monospace; color: var(--accent2); font-weight: 600; }
+    .schema-dtype {
+      font-size: 0.75rem; color: var(--faint); font-family: 'JetBrains Mono', monospace;
+      background: rgba(255,255,255,.05); border: 1px solid var(--border);
+      padding: 2px 8px; border-radius: 4px;
+    }
+
+    /* ─── Empty states ───────────────────────────────────────────── */
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--faint); font-size: 0.88rem; }
+    .empty-state .icon { font-size: 2rem; margin-bottom: 12px; display: block; }
+
+    /* ─── Toast ──────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface2); border: 1px solid var(--border2);
+      color: var(--text); border-radius: 10px; padding: 12px 18px;
+      font-size: 0.84rem; font-weight: 500;
+      transform: translateY(80px); opacity: 0;
+      transition: all .3s cubic-bezier(0.22,1,0.36,1);
+      z-index: 999; display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    }
+    #toast.show { transform: none; opacity: 1; }
+
+    /* ─── Spinner ────────────────────────────────────────────────── */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(124,107,255,.3); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .6s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Docs ───────────────────────────────────────────────────── */
+    .docs-codeblock {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; overflow: hidden; margin-top: 12px;
+    }
+    .docs-codeblock-header {
+      padding: 8px 14px; font-size: 0.72rem; font-weight: 600; color: var(--faint);
+      background: rgba(255,255,255,.02); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .docs-codeblock pre {
+      margin: 0; padding: 16px 14px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.75;
+      white-space: pre-wrap; word-break: break-all; color: #c9d1d9;
+    }
+    .kw  { color: #ff7b72; } .fn { color: #d2a8ff; } .st { color: #a5d6ff; }
+    .cm  { color: #8b949e; } .va { color: #79c0ff; } .nu { color: #f2cc60; }
+
+    .docs-section h3 { font-size: 1rem; font-weight: 700; margin: 24px 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    .docs-section p  { font-size: 0.88rem; color: var(--muted); line-height: 1.7; margin: 8px 0; }
+    .docs-section ul { padding-left: 20px; }
+    .docs-section li { font-size: 0.86rem; color: var(--muted); line-height: 1.75; }
+    .docs-section code { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--accent2); background: rgba(124,107,255,.08); padding: 1px 6px; border-radius: 4px; }
+
+    .endpoint-docs-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 14px; }
+    .endpoint-docs-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; transition: background .15s; }
+    .endpoint-docs-header:hover { background: rgba(255,255,255,.02); }
+    .endpoint-docs-path { font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; font-weight: 600; }
+    .endpoint-docs-desc { font-size: 0.82rem; color: var(--muted); margin-left: auto; }
+    .endpoint-docs-body { display: none; padding: 0 16px 16px; border-top: 1px solid var(--border); }
+    .endpoint-docs-body.open { display: block; }
+  </style>
+</head>
+<body>
+
+<div id="layout">
+  <!-- ── Sidebar ─────────────────────────────────────────────────── -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-text">deeploi</div>
+      <div class="sidebar-logo-sub">API Dashboard</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Overview</div>
+      <button class="nav-item active" data-page="page-overview"><span class="icon">🏠</span> Overview</button>
+      <button class="nav-item" data-page="page-playground"><span class="icon">⚡</span> Playground</button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Metrics</div>
+      <button class="nav-item" data-page="page-metrics"><span class="icon">📊</span> Evaluation</button>
+      <button class="nav-item" data-page="page-history"><span class="icon">📋</span> History</button>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Reference</div>
+      <button class="nav-item" data-page="page-docs"><span class="icon">📖</span> API Docs</button>
+      <button class="nav-item" data-page="page-schema"><span class="icon">🔩</span> Schema</button>
+    </div>
+
+    <div class="connection-area">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-label" style="font-size:.8rem;color:var(--muted)">Disconnected</span>
+        <span id="status-latency" style="font-size:.75rem;color:var(--faint);margin-left:auto"></span>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="refreshAll()" style="width:100%">↻ Refresh</button>
+    </div>
+  </aside>
+
+  <!-- ── Main ───────────────────────────────────────────────────── -->
+  <div id="main">
+    <div id="topbar">
+      <h1 id="page-title">Overview</h1>
+      <div class="url-bar">
+        <label>BASE URL</label>
+        <input id="base-url" type="text" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000" onchange="onBaseUrlChange()" />
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="refreshAll()">Connect</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearHistory()">Clear data</button>
+    </div>
+
+    <!-- ── OVERVIEW ──────────────────────────────────────────────── -->
+    <div class="page active" id="page-overview">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Status</div>
+          <div class="stat-value" id="ov-status" style="font-size:1.1rem">—</div>
+          <div class="stat-sub" id="ov-status-sub">Not connected</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Predictions</div>
+          <div class="stat-value" id="ov-total">0</div>
+          <div class="stat-sub">this session</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Latency</div>
+          <div class="stat-value" id="ov-latency">—</div>
+          <div class="stat-sub">ms / request</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Model</div>
+          <div class="stat-value" id="ov-model" style="font-size:1rem;line-height:1.3">—</div>
+          <div class="stat-sub" id="ov-task">—</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🤖 Model Metadata</span>
+            <button class="btn btn-ghost btn-sm" onclick="fetchMeta()">↻ Reload</button>
+          </div>
+          <div class="card-body" id="meta-content">
+            <div class="empty-state"><span class="icon">🔌</span>Connect to a running Deeploi server to see metadata.</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🏥 Health</span>
+            <span id="health-badge"></span>
+          </div>
+          <div class="card-body">
+            <div id="health-content" style="font-size:.86rem;color:var(--muted)">Click <strong>Connect</strong> to check server health.</div>
+            <div style="margin-top:20px">
+              <div style="font-size:.78rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Endpoint Check</div>
+              <div id="endpoint-checks" style="display:flex;flex-direction:column;gap:6px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">🚀 Quick Start</span></div>
+        <div class="card-body">
+          <p style="font-size:.86rem;color:var(--muted);margin-bottom:14px">Start your Deeploi server, open this dashboard, then use the Playground or docs below to test requests.</p>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:.75rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">deploy()</div>
+              <div class="docs-codeblock"><pre style="padding:12px 14px;font-size:.79rem"><span class="kw">from</span> deeploi <span class="kw">import</span> <span class="fn">deploy</span>
+<span class="fn">deploy</span>(model, port=<span class="nu">8000</span>)</pre></div>
+            </div>
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:.75rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">load() + serve()</div>
+              <div class="docs-codeblock"><pre style="padding:12px 14px;font-size:.79rem"><span class="kw">from</span> deeploi <span class="kw">import</span> <span class="fn">load</span>
+pkg = <span class="fn">load</span>(<span class="st">"artifacts/iris_rf"</span>)
+pkg.<span class="fn">serve</span>(port=<span class="nu">8000</span>)</pre></div>
+            </div>
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:.75rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Docker artifact</div>
+              <div class="docs-codeblock"><pre style="padding:12px 14px;font-size:.79rem">pkg.<span class="fn">save</span>(<span class="st">"artifacts/iris_rf"</span>, generate_docker=<span class="kw">True</span>)
+
+<span class="cm"># then build and run</span>
+docker build -t iris-model .</pre></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PLAYGROUND ─────────────────────────────────────────────── -->
+    <div class="page" id="page-playground">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">⚡ API Playground</span>
+          <span style="font-size:.78rem;color:var(--faint)">Send real requests to your running model</span>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:16px">
+
+          <div>
+            <div style="font-size:.75rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Endpoint</div>
+            <div class="endpoint-selector">
+              <button class="endpoint-btn active" data-endpoint="predict"><span class="method-badge badge-post">POST</span> /predict</button>
+              <button class="endpoint-btn" data-endpoint="predict_proba"><span class="method-badge badge-post">POST</span> /predict_proba</button>
+              <button class="endpoint-btn" data-endpoint="health"><span class="method-badge badge-get">GET</span> /health</button>
+              <button class="endpoint-btn" data-endpoint="meta"><span class="method-badge badge-get">GET</span> /meta</button>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="font-size:.75rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em">Input mode</div>
+            <button class="btn btn-ghost btn-sm" id="toggle-mode-btn" onclick="toggleInputMode()">Switch to raw JSON</button>
+            <button class="btn btn-ghost btn-sm" onclick="addRecord()" id="add-record-btn">＋ Add record</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadSamplePayload()">Load sample</button>
+          </div>
+
+          <div id="form-mode">
+            <div id="records-container" style="display:flex;flex-direction:column;gap:16px"></div>
+          </div>
+          <div id="raw-mode" style="display:none">
+            <textarea class="code-editor" id="raw-json" rows="8" placeholder='{"records": [{"feature1": 1.0}]}'></textarea>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="sendRequest()" id="send-btn">▶  Send Request</button>
+            <span id="req-status" style="font-size:.8rem;color:var(--faint)"></span>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="font-size:.75rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em">Response</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span id="resp-status-chip"></span>
+                <span id="resp-latency" style="font-size:.78rem;color:var(--faint)"></span>
+                <button class="btn btn-ghost btn-sm" onclick="copyResponse()">Copy</button>
+              </div>
+            </div>
+            <div class="response-box" id="response-box">Waiting for request…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── METRICS ─────────────────────────────────────────────────── -->
+    <div class="page" id="page-metrics">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Requests</div>
+          <div class="stat-value" id="m-total">0</div>
+          <div class="stat-sub">this session</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Errors</div>
+          <div class="stat-value" id="m-errors" style="color:var(--red)">0</div>
+          <div class="stat-sub">non-200 responses</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Confidence</div>
+          <div class="stat-value" id="m-confidence">—</div>
+          <div class="stat-sub">max class probability</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Latency</div>
+          <div class="stat-value" id="m-latency">—</div>
+          <div class="stat-sub">ms per request</div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><span class="card-title">📦 Prediction Distribution</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-pred-dist"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">⏱ Latency over Time</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-latency"></canvas></div></div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><span class="card-title">🎯 Confidence Buckets</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-confidence"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">📈 Requests per Minute</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-rpm"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HISTORY ─────────────────────────────────────────────────── -->
+    <div class="page" id="page-history">
+      <div class="card" style="flex:1">
+        <div class="card-header">
+          <span class="card-title">📋 Prediction History</span>
+          <button class="btn btn-red btn-sm" onclick="clearHistory()">Clear</button>
+        </div>
+        <div class="card-body" style="padding:0;overflow-x:auto">
+          <div id="history-table-wrap">
+            <div class="empty-state"><span class="icon">📭</span>No predictions yet. Use the Playground to send requests.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DOCS ────────────────────────────────────────────────────── -->
+    <div class="page" id="page-docs">
+      <div class="card">
+        <div class="card-header"><span class="card-title">📖 API Reference</span></div>
+        <div class="card-body docs-section" style="max-width:760px">
+          <h3>Base URL</h3>
+          <p>All endpoints are relative to your server base URL (set in the top bar). Default: <code>http://127.0.0.1:8000</code></p>
+
+          <div class="endpoint-docs-card">
+            <div class="endpoint-docs-header" onclick="toggleDocs(this)">
+              <span class="method-badge badge-post">POST</span>
+              <span class="endpoint-docs-path">/predict</span>
+              <span class="endpoint-docs-desc">Return class predictions</span>
+              <span style="margin-left:8px;color:var(--faint)">▾</span>
+            </div>
+            <div class="endpoint-docs-body">
+              <p>Returns the predicted class (or value for regressors) for each record.</p>
+              <div style="font-size:.78rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-top:14px;margin-bottom:6px">Request</div>
+              <div class="docs-codeblock"><pre>{ <span class="va">"records"</span>: [{ <span class="st">"feature_1"</span>: <span class="nu">1.0</span>, <span class="st">"feature_2"</span>: <span class="nu">3.5</span> }] }</pre></div>
+              <div style="font-size:.78rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-top:12px;margin-bottom:6px">Response</div>
+              <div class="docs-codeblock"><pre>{ <span class="va">"predictions"</span>: [<span class="nu">0</span>] }</pre></div>
+            </div>
+          </div>
+
+          <div class="endpoint-docs-card">
+            <div class="endpoint-docs-header" onclick="toggleDocs(this)">
+              <span class="method-badge badge-post">POST</span>
+              <span class="endpoint-docs-path">/predict_proba</span>
+              <span class="endpoint-docs-desc">Return class probabilities</span>
+              <span style="margin-left:8px;color:var(--faint)">▾</span>
+            </div>
+            <div class="endpoint-docs-body">
+              <p>Classifiers only. Returns per-class confidence scores.</p>
+              <div class="docs-codeblock" style="margin-top:12px"><pre>{
+  <span class="va">"predictions"</span>:   [<span class="nu">0</span>],
+  <span class="va">"probabilities"</span>: [{ <span class="st">"0"</span>: <span class="nu">0.91</span>, <span class="st">"1"</span>: <span class="nu">0.06</span>, <span class="st">"2"</span>: <span class="nu">0.03</span> }]
+}</pre></div>
+            </div>
+          </div>
+
+          <div class="endpoint-docs-card">
+            <div class="endpoint-docs-header" onclick="toggleDocs(this)">
+              <span class="method-badge badge-get">GET</span>
+              <span class="endpoint-docs-path">/meta</span>
+              <span class="endpoint-docs-desc">Model metadata</span>
+              <span style="margin-left:8px;color:var(--faint)">▾</span>
+            </div>
+            <div class="endpoint-docs-body">
+              <p>Returns model type, framework, task type, features and Deeploi version.</p>
+              <div class="docs-codeblock" style="margin-top:12px"><pre>{
+  <span class="va">"model_type"</span>:     <span class="st">"RandomForestClassifier"</span>,
+  <span class="va">"framework"</span>:      <span class="st">"sklearn"</span>,
+  <span class="va">"task_type"</span>:      <span class="st">"classification"</span>,
+  <span class="va">"features"</span>:       [<span class="st">"sepal length (cm)"</span>, <span class="st">"..."</span>],
+  <span class="va">"deeploi_version"</span>: <span class="st">"0.2.0"</span>
+}</pre></div>
+            </div>
+          </div>
+
+          <div class="endpoint-docs-card">
+            <div class="endpoint-docs-header" onclick="toggleDocs(this)">
+              <span class="method-badge badge-get">GET</span>
+              <span class="endpoint-docs-path">/health</span>
+              <span class="endpoint-docs-desc">Health check</span>
+              <span style="margin-left:8px;color:var(--faint)">▾</span>
+            </div>
+            <div class="endpoint-docs-body">
+              <p>Always returns <code>200 OK</code> when the server is running.</p>
+              <div class="docs-codeblock" style="margin-top:12px"><pre>{ <span class="va">"status"</span>: <span class="st">"ok"</span> }</pre></div>
+            </div>
+          </div>
+
+          <h3>Errors</h3>
+          <p>Validation failures return <code>422 Unprocessable Entity</code> with a descriptive <code>detail</code> array. Feature name mismatches, missing fields, and wrong types are all caught automatically.</p>
+
+          <h3>Python client example</h3>
+          <div class="docs-codeblock">
+            <div class="docs-codeblock-header"><span>client.py</span><button class="btn btn-ghost btn-sm" onclick="copyCode(this)">Copy</button></div>
+            <pre><span class="kw">import</span> requests
+
+BASE = <span class="st">"http://127.0.0.1:8000"</span>
+HEADERS = {<span class="st">"Content-Type"</span>: <span class="st">"application/json"</span>}
+
+payload = {
+    <span class="st">"records"</span>: [{
+        <span class="st">"sepal length (cm)"</span>: <span class="nu">5.1</span>, <span class="st">"sepal width (cm)"</span>: <span class="nu">3.5</span>,
+        <span class="st">"petal length (cm)"</span>: <span class="nu">1.4</span>, <span class="st">"petal width (cm)"</span>: <span class="nu">0.2</span>
+    }]
+}
+
+r = requests.<span class="fn">post</span>(f<span class="st">"{BASE}/predict"</span>, json=payload, headers=HEADERS)
+<span class="fn">print</span>(r.json())  <span class="cm"># {"predictions": [0]}</span></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SCHEMA ──────────────────────────────────────────────────── -->
+    <div class="page" id="page-schema">
+      <div class="card" style="flex:1">
+        <div class="card-header">
+          <span class="card-title">🔩 Feature Schema</span>
+          <button class="btn btn-ghost btn-sm" onclick="fetchMeta()">↻ Reload</button>
+        </div>
+        <div class="card-body" id="schema-content">
+          <div class="empty-state"><span class="icon">🔌</span>Connect to a running server to view the feature schema.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ─── State ─────────────────────────────────────────────────────── */
+const state = {
+  baseUrl: 'http://127.0.0.1:8000',
+  authEnabled: false,
+  authHeaderName: 'X-API-Key',
+  authKey: '',
+  meta: null, schema: null,
+  history: [], inputMode: 'form',
+  activeEndpoint: 'predict', records: [{}],
+  charts: {}, rpmBuckets: {},
+};
+
+/* ─── Charts ────────────────────────────────────────────────────── */
+const CD = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } } },
+  scales: {
+    x: { ticks: { color: '#475569', font: { family: 'Inter', size: 11 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+    y: { ticks: { color: '#475569', font: { family: 'Inter', size: 11 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+  }
+};
+
+function initCharts() {
+  const p = 'rgba(124,107,255,', g = 'rgba(52,211,153,', b = 'rgba(56,189,248,', y = 'rgba(251,191,36,';
+  state.charts.predDist = new Chart(document.getElementById('chart-pred-dist'), {
+    type: 'bar',
+    data: { labels: [], datasets: [{ label: 'Count', data: [], backgroundColor: p+'0.6)', borderColor: p+'1)', borderWidth: 1, borderRadius: 5 }] },
+    options: { ...JSON.parse(JSON.stringify(CD)), plugins: { legend: { display: false } } }
+  });
+  state.charts.latency = new Chart(document.getElementById('chart-latency'), {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: 'Latency (ms)', data: [], borderColor: g+'1)', backgroundColor: g+'0.08)', fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: g+'1)' }] },
+    options: JSON.parse(JSON.stringify(CD))
+  });
+  state.charts.confidence = new Chart(document.getElementById('chart-confidence'), {
+    type: 'bar',
+    data: { labels: ['0–20%','20–40%','40–60%','60–80%','80–100%'], datasets: [{ label: 'Predictions', data: [0,0,0,0,0], backgroundColor: b+'0.55)', borderColor: b+'1)', borderWidth: 1, borderRadius: 5 }] },
+    options: { ...JSON.parse(JSON.stringify(CD)), plugins: { legend: { display: false } } }
+  });
+  state.charts.rpm = new Chart(document.getElementById('chart-rpm'), {
+    type: 'bar',
+    data: { labels: [], datasets: [{ label: 'Requests', data: [], backgroundColor: y+'0.5)', borderColor: y+'1)', borderWidth: 1, borderRadius: 5 }] },
+    options: { ...JSON.parse(JSON.stringify(CD)), plugins: { legend: { display: false } } }
+  });
+}
+
+/* ─── Navigation ─────────────────────────────────────────────────── */
+const PAGE_TITLES = { 'page-overview':'Overview','page-playground':'API Playground','page-metrics':'Evaluation Metrics','page-history':'Prediction History','page-docs':'API Documentation','page-schema':'Feature Schema' };
+document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.page).classList.add('active');
+    document.getElementById('page-title').textContent = PAGE_TITLES[btn.dataset.page] || '';
+  });
+});
+
+/* ─── Base URL ───────────────────────────────────────────────────── */
+function onBaseUrlChange() { state.baseUrl = document.getElementById('base-url').value.replace(/\/$/, ''); }
+
+/* ─── API helpers ────────────────────────────────────────────────── */
+async function apiFetch(path, opts = {}) {
+  const t0 = performance.now();
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers||{}) };
+  if (state.authEnabled && state.authKey) {
+    headers[state.authHeaderName] = state.authKey;
+  }
+  const r = await fetch(state.baseUrl + path, { ...opts, headers, mode: 'cors' });
+  const latency = Math.round(performance.now() - t0);
+  const body = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, body, latency };
+}
+
+/* ─── Health ─────────────────────────────────────────────────────── */
+async function checkHealth() {
+  const dot = document.getElementById('status-dot'), label = document.getElementById('status-label'), latEl = document.getElementById('status-latency');
+  dot.className = 'status-dot checking'; label.textContent = 'Checking…';
+  try {
+    const { ok, latency, body } = await apiFetch('/health');
+    if (!ok) throw new Error();
+    dot.className = 'status-dot online'; label.textContent = 'Online'; latEl.textContent = latency + ' ms';
+    renderHealthCard(true, latency, body);
+  } catch {
+    dot.className = 'status-dot offline'; label.textContent = 'Offline'; latEl.textContent = '';
+    renderHealthCard(false, null, null);
+  }
+}
+
+function renderHealthCard(online, latency, body) {
+  document.getElementById('health-badge').innerHTML = online
+    ? `<span class="resp-status ok">● 200 OK</span>`
+    : `<span class="resp-status err">✕ Offline</span>`;
+  document.getElementById('health-content').innerHTML = online
+    ? `<div style="font-size:.86rem;color:var(--muted)">Server is healthy. Response: <code style="color:var(--green)">${JSON.stringify(body)}</code> &nbsp; <strong style="color:var(--text)">${latency} ms</strong></div>`
+    : `<div style="font-size:.86rem;color:var(--red)">Cannot reach <code>${state.baseUrl}</code>. Is Deeploi running?</div>`;
+  const checks = ['/health','/predict','/predict_proba','/meta'].map((p,i) => `
+    <div style="display:flex;align-items:center;gap:10px;font-size:.8rem;padding:4px 0">
+      <span style="color:${online?'var(--green)':'var(--faint)'}">${online?'✓':'○'}</span>
+      <span class="method-badge ${i<2?'badge-post':'badge-get'}" style="font-size:.67rem">${i<2?'POST':'GET'}</span>
+      <code style="color:var(--text)">${state.baseUrl}${p}</code>
+    </div>`);
+  const authLine = state.authEnabled
+    ? `<div style="margin-top:10px;font-size:.78rem;color:var(--muted)">Dashboard auth is active via <code style="color:var(--accent2)">${state.authHeaderName}</code>.</div>`
+    : '';
+  document.getElementById('endpoint-checks').innerHTML = checks.join('') + authLine;
+}
+
+/* ─── Metadata ───────────────────────────────────────────────────── */
+async function fetchMeta() {
+  try {
+    const { ok, body } = await apiFetch('/meta');
+    if (!ok) throw body;
+    state.meta = body;
+    document.getElementById('meta-content').innerHTML = `<table class="meta-table">
+      ${[['Model type',body.model_type||'—'],['Framework',body.framework||'—'],['Task type',body.task_type||'—'],
+         ['Features',body.features?body.features.length+' features':'—'],['Deeploi ver',body.deeploi_version||'—'],
+         ['supports_proba',body.supports_predict_proba!==undefined?String(body.supports_predict_proba):'—']]
+        .map(([k,v])=>`<tr><td>${k}</td><td><code>${v}</code></td></tr>`).join('')}
+    </table>`;
+    document.getElementById('ov-model').textContent = body.model_type || '—';
+    document.getElementById('ov-task').textContent  = body.task_type  || '—';
+    document.getElementById('ov-status').innerHTML  = `<span style="color:var(--green)">● Online</span>`;
+    document.getElementById('ov-status-sub').textContent = state.baseUrl;
+    if (body.features) {
+      state.schema = body.features.map((f,i) => ({ name: f, dtype: body.dtypes ? body.dtypes[i] : 'float64' }));
+      renderSchema(); buildFormInputs();
+    }
+  } catch {
+    document.getElementById('meta-content').innerHTML = `<div class="empty-state"><span class="icon">⚠️</span>Could not retrieve metadata.</div>`;
+  }
+}
+
+function renderSchema() {
+  if (!state.schema) return;
+  document.getElementById('schema-content').innerHTML = `
+    <p style="font-size:.84rem;color:var(--muted);margin-bottom:14px">${state.schema.length} feature${state.schema.length!==1?'s':''} detected.</p>
+    <div class="schema-list">${state.schema.map((f,i)=>`
+      <div class="schema-row">
+        <span style="color:var(--faint);font-size:.74rem;min-width:26px;text-align:right;margin-right:8px">#${i+1}</span>
+        <span class="schema-name">${f.name}</span>
+        <span class="schema-dtype">${f.dtype}</span>
+      </div>`).join('')}
+    </div>`;
+}
+
+/* ─── Playground ─────────────────────────────────────────────────── */
+document.querySelectorAll('.endpoint-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.endpoint-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); state.activeEndpoint = btn.dataset.endpoint; updatePlaygroundUI();
+  });
+});
+
+function updatePlaygroundUI() {
+  const isGet = ['health','meta'].includes(state.activeEndpoint);
+  document.getElementById('form-mode').style.display  = isGet ? 'none' : '';
+  document.getElementById('raw-mode').style.display   = (isGet || state.inputMode==='form') ? 'none' : '';
+  document.getElementById('toggle-mode-btn').style.display = isGet ? 'none' : '';
+  document.getElementById('add-record-btn').style.display  = (isGet || state.inputMode==='raw') ? 'none' : '';
+}
+
+function toggleInputMode() {
+  const btn = document.getElementById('toggle-mode-btn');
+  if (state.inputMode === 'form') {
+    state.inputMode = 'raw';
+    document.getElementById('form-mode').style.display = 'none';
+    document.getElementById('raw-mode').style.display  = '';
+    document.getElementById('add-record-btn').style.display = 'none';
+    btn.textContent = 'Switch to form';
+    loadSamplePayload();
+  } else {
+    state.inputMode = 'form';
+    document.getElementById('form-mode').style.display = '';
+    document.getElementById('raw-mode').style.display  = 'none';
+    document.getElementById('add-record-btn').style.display = '';
+    btn.textContent = 'Switch to raw JSON';
+  }
+}
+
+function buildFormInputs() {
+  if (!state.schema) return;
+  const container = document.getElementById('records-container');
+  container.innerHTML = '';
+  state.records.forEach((_, ri) => {
+    const el = document.createElement('div');
+    el.className = 'card'; el.id = `record-${ri}`;
+    el.innerHTML = `
+      <div class="card-header">
+        <span class="card-title">Record ${ri+1}</span>
+        ${state.records.length>1?`<button class="btn btn-red btn-sm" onclick="removeRecord(${ri})">Remove</button>`:''}
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">
+          ${state.schema.map(f=>`
+            <div>
+              <label style="display:block;font-size:.73rem;font-weight:600;color:var(--faint);margin-bottom:4px;font-family:'JetBrains Mono',monospace">${f.name}</label>
+              <input class="form-input" type="number" step="any"
+                data-record="${ri}" data-field="${f.name}"
+                placeholder="${f.dtype}"
+                value="${state.records[ri][f.name]!==undefined?state.records[ri][f.name]:''}"
+                oninput="onFieldChange(${ri},'${f.name}',this.value)" />
+            </div>`).join('')}
+        </div>
+      </div>`;
+    container.appendChild(el);
+  });
+}
+
+function onFieldChange(ri, field, value) { state.records[ri][field] = value===''?'':parseFloat(value); }
+function addRecord() { state.records.push({}); buildFormInputs(); }
+function removeRecord(i) { state.records.splice(i,1); buildFormInputs(); }
+
+function loadSamplePayload() {
+  const sample = {};
+  (state.schema||[]).forEach(f => { sample[f.name] = 0; });
+  if (!state.schema) { sample.feature1 = 1.0; sample.feature2 = 2.0; }
+  document.getElementById('raw-json').value = JSON.stringify({ records: [sample] }, null, 2);
+}
+
+function gatherPayload() {
+  if (state.inputMode === 'raw') return JSON.parse(document.getElementById('raw-json').value);
+  return { records: state.records.map(r => { const c={}; (state.schema||[]).forEach(f=>{c[f.name]=Number(r[f.name]||0);}); return c; }) };
+}
+
+/* ─── Send request ───────────────────────────────────────────────── */
+async function sendRequest() {
+  const btn = document.getElementById('send-btn'), respBox = document.getElementById('response-box');
+  const chipEl = document.getElementById('resp-status-chip'), latEl = document.getElementById('resp-latency');
+  const isGet = ['health','meta'].includes(state.activeEndpoint);
+  btn.innerHTML = '<span class="spinner"></span> Sending…'; btn.disabled = true;
+  respBox.className = 'response-box'; chipEl.innerHTML = ''; latEl.textContent = '';
+  try {
+    const opts = isGet ? { method:'GET' } : { method:'POST', body: JSON.stringify(gatherPayload()) };
+    const { ok, status, body, latency } = await apiFetch('/'+state.activeEndpoint, opts);
+    respBox.textContent = JSON.stringify(body, null, 2);
+    respBox.className = 'response-box '+(ok?'success':'error');
+    chipEl.innerHTML = `<span class="resp-status ${ok?'ok':'err'}">${status}</span>`;
+    latEl.textContent = latency+' ms';
+    const entry = { ts: Date.now(), endpoint: state.activeEndpoint, latency, ok, status, response: body, payload: isGet?null:gatherPayload() };
+    state.history.unshift(entry);
+    if (state.history.length > 200) state.history.pop();
+    if (!isGet) { updateMetrics(entry, body); renderHistoryTable(); }
+    updateOverviewStats();
+  } catch(e) {
+    respBox.textContent = 'Error: '+e.message+'\n\nMake sure the server is running at:\n'+state.baseUrl;
+    respBox.className = 'response-box error';
+    chipEl.innerHTML = `<span class="resp-status err">Error</span>`;
+  }
+  btn.innerHTML = '▶  Send Request'; btn.disabled = false;
+}
+
+/* ─── Metrics ────────────────────────────────────────────────────── */
+function updateMetrics(entry, body) {
+  if (body.predictions) {
+    body.predictions.forEach(p => {
+      const key = String(p), chart = state.charts.predDist;
+      const idx = chart.data.labels.indexOf(key);
+      if (idx===-1) { chart.data.labels.push(key); chart.data.datasets[0].data.push(1); }
+      else chart.data.datasets[0].data[idx]++;
+      chart.update();
+    });
+  }
+  { const chart = state.charts.latency, label = new Date(entry.ts).toLocaleTimeString();
+    chart.data.labels.push(label); chart.data.datasets[0].data.push(entry.latency);
+    if (chart.data.labels.length>30) { chart.data.labels.shift(); chart.data.datasets[0].data.shift(); }
+    chart.update(); }
+  if (body.probabilities) {
+    body.probabilities.forEach(prob => {
+      const bucket = Math.min(4, Math.floor(Math.max(...Object.values(prob))*5));
+      state.charts.confidence.data.datasets[0].data[bucket]++;
+      state.charts.confidence.update();
+    });
+  }
+  { const min = new Date(entry.ts); min.setSeconds(0,0);
+    const key = min.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    state.rpmBuckets[key] = (state.rpmBuckets[key]||0)+1;
+    const chart = state.charts.rpm, idx = chart.data.labels.indexOf(key);
+    if (idx===-1) { chart.data.labels.push(key); chart.data.datasets[0].data.push(1); }
+    else chart.data.datasets[0].data[idx] = state.rpmBuckets[key];
+    if (chart.data.labels.length>20) { const old=chart.data.labels.shift(); delete state.rpmBuckets[old]; chart.data.datasets[0].data.shift(); }
+    chart.update(); }
+  updateMetricCards();
+}
+
+function updateMetricCards() {
+  const all = state.history, total = all.length, errors = all.filter(h=>!h.ok).length;
+  const lats = all.filter(h=>h.latency>0).map(h=>h.latency);
+  const avgLat = lats.length ? Math.round(lats.reduce((a,b)=>a+b,0)/lats.length) : null;
+  const probE = all.filter(h=>h.response&&h.response.probabilities);
+  let avgConf = null;
+  if (probE.length) { const c=probE.flatMap(h=>h.response.probabilities.map(p=>Math.max(...Object.values(p)))); avgConf=(c.reduce((a,b)=>a+b,0)/c.length*100).toFixed(1)+'%'; }
+  document.getElementById('m-total').textContent      = total;
+  document.getElementById('m-errors').textContent     = errors;
+  document.getElementById('m-confidence').textContent = avgConf||'—';
+  document.getElementById('m-latency').textContent    = avgLat!==null?avgLat+' ms':'—';
+}
+
+function updateOverviewStats() {
+  const lats = state.history.filter(h=>h.latency>0).map(h=>h.latency);
+  document.getElementById('ov-total').textContent   = state.history.length;
+  document.getElementById('ov-latency').textContent = lats.length ? Math.round(lats.reduce((a,b)=>a+b,0)/lats.length)+' ms' : '—';
+}
+
+/* ─── History ────────────────────────────────────────────────────── */
+function renderHistoryTable() {
+  const wrap = document.getElementById('history-table-wrap');
+  if (!state.history.length) { wrap.innerHTML=`<div class="empty-state"><span class="icon">📭</span>No predictions yet.</div>`; return; }
+  const rows = state.history.slice(0,100).map(h => {
+    const preds = h.response&&h.response.predictions ? h.response.predictions.map(p=>`<span class="pred-chip">${p}</span>`).join(' ') : '—';
+    return `<tr>
+      <td style="color:var(--faint)">${new Date(h.ts).toLocaleTimeString()}</td>
+      <td><code style="font-size:.79rem;color:var(--accent3)">/${h.endpoint}</code></td>
+      <td><span class="resp-status ${h.ok?'ok':'err'}" style="font-size:.72rem">${h.status||'err'}</span></td>
+      <td>${preds}</td>
+      <td style="color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.78rem">${h.latency} ms</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table class="history-table"><thead><tr><th>Time</th><th>Endpoint</th><th>Status</th><th>Predictions</th><th>Latency</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ─── Clear ──────────────────────────────────────────────────────── */
+function clearHistory() {
+  state.history = []; state.rpmBuckets = {};
+  renderHistoryTable(); updateMetricCards(); updateOverviewStats();
+  state.charts.predDist.data.labels = []; state.charts.predDist.data.datasets[0].data = []; state.charts.predDist.update();
+  state.charts.latency.data.labels  = []; state.charts.latency.data.datasets[0].data  = []; state.charts.latency.update();
+  state.charts.confidence.data.datasets[0].data = [0,0,0,0,0]; state.charts.confidence.update();
+  state.charts.rpm.data.labels = []; state.charts.rpm.data.datasets[0].data = []; state.charts.rpm.update();
+  toast('History cleared');
+}
+
+/* ─── Refresh ────────────────────────────────────────────────────── */
+async function refreshAll() {
+  state.baseUrl = document.getElementById('base-url').value.replace(/\/$/, '');
+  await Promise.all([checkHealth(), fetchMeta()]);
+  toast('Connected to '+state.baseUrl);
+}
+
+/* ─── Docs accordion ─────────────────────────────────────────────── */
+function toggleDocs(header) {
+  const body = header.nextElementSibling;
+  body.classList.toggle('open');
+  header.querySelector('span:last-child').textContent = body.classList.contains('open') ? '▴' : '▾';
+}
+
+/* ─── Copy ───────────────────────────────────────────────────────── */
+function copyResponse() { navigator.clipboard.writeText(document.getElementById('response-box').textContent).then(()=>toast('Copied')); }
+function copyCode(btn)  { navigator.clipboard.writeText(btn.closest('.docs-codeblock').querySelector('pre').innerText).then(()=>toast('Copied')); }
+
+/* ─── Toast ──────────────────────────────────────────────────────── */
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>el.classList.remove('show'),2200);
+}
+
+/* ─── Init ───────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  const config = window.__DEEPLOI_CONFIG__ || {};
+  state.authEnabled = Boolean(config.authEnabled);
+  state.authHeaderName = config.authHeaderName || 'X-API-Key';
+  state.authKey = config.authKey || '';
+
+  // Auto-connect to the same origin this page was served from
+  const origin = window.location.origin;
+  document.getElementById('base-url').value = origin;
+  state.baseUrl = origin;
+  initCharts(); refreshAll(); updatePlaygroundUI();
+});
+</script>
+</body>
+</html>

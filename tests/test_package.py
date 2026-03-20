@@ -77,10 +77,36 @@ class TestPackageCreation:
         # Empty DataFrame
         with pytest.raises(InvalidSampleError):
             package(model, pd.DataFrame())
-        
-        # None
+
+    def test_package_without_sample_uses_model_feature_names(self):
+        """A fitted model with feature metadata should not require sample."""
+        iris = load_iris(as_frame=True)
+        X, y = iris.data, iris.target
+
+        model = RandomForestClassifier(n_estimators=5, random_state=42)
+        model.fit(X, y)
+
+        pkg = package(model)
+
+        assert pkg.schema.column_order == list(X.columns)
+        assert all(feature.dtype == "unknown" for feature in pkg.schema.features)
+
+    def test_package_without_sample_generates_generic_names_for_array_fit(self):
+        """Fallback to generic names when only n_features_in_ is available."""
+        iris = load_iris()
+        X, y = iris.data, iris.target
+
+        model = RandomForestClassifier(n_estimators=5, random_state=42)
+        model.fit(X, y)
+
+        pkg = package(model)
+
+        assert pkg.schema.column_order == ["feature_0", "feature_1", "feature_2", "feature_3"]
+
+    def test_package_without_sample_raises_without_model_metadata(self):
+        """A model without fitted feature metadata should still require sample."""
         with pytest.raises(InvalidSampleError):
-            package(model, None)
+            DeeploiPackage.from_model(RandomForestClassifier(), sample=None)
 
 
 class TestPrediction:
@@ -202,6 +228,53 @@ class TestSaveAndLoad:
         loaded_pred = loaded_pkg.predict(X[:5])
         
         assert original_pred.predictions == loaded_pred.predictions
+
+    def test_generate_docker_files(self, tmp_path):
+        """Test generating Docker files for a saved artifact."""
+        iris = load_iris(as_frame=True)
+        X, y = iris.data, iris.target
+
+        model = RandomForestClassifier(n_estimators=5, random_state=42)
+        model.fit(X, y)
+
+        pkg = package(model, X)
+        artifact_path = str(tmp_path / "docker_artifact")
+        pkg.save(artifact_path)
+
+        pkg.generate_docker(artifact_path, port=9001)
+
+        import os
+        dockerfile = os.path.join(artifact_path, "Dockerfile")
+        dockerignore = os.path.join(artifact_path, ".dockerignore")
+        serve_app = os.path.join(artifact_path, "serve.py")
+
+        assert os.path.exists(dockerfile)
+        assert os.path.exists(dockerignore)
+        assert os.path.exists(serve_app)
+
+        with open(dockerfile, "r") as f:
+            dockerfile_content = f.read()
+
+        assert "FROM python:3.11-slim" in dockerfile_content
+        assert "EXPOSE 9001" in dockerfile_content
+        assert '"--port", "9001"' in dockerfile_content
+
+    def test_save_with_generate_docker(self, tmp_path):
+        """Test generating Docker files directly from save()."""
+        iris = load_iris(as_frame=True)
+        X, y = iris.data, iris.target
+
+        model = RandomForestClassifier(n_estimators=5, random_state=42)
+        model.fit(X, y)
+
+        pkg = package(model, X)
+        artifact_path = str(tmp_path / "docker_on_save")
+        pkg.save(artifact_path, generate_docker=True, docker_port=9100)
+
+        import os
+        assert os.path.exists(os.path.join(artifact_path, "Dockerfile"))
+        assert os.path.exists(os.path.join(artifact_path, ".dockerignore"))
+        assert os.path.exists(os.path.join(artifact_path, "serve.py"))
 
 
 class TestSchema:
