@@ -122,6 +122,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Deeploi marketing landing page (local copy)
+/index.html
+
 # IDE
 .vscode/
 .idea/
