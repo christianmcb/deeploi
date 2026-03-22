@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    {name = "Christian", email = "christian@example.com"}
+    {name = "Christian", email = "christianmcb94@gmail.com"}
 ]
 keywords = ["machine-learning", "model-deployment", "api", "sklearn", "xgboost", "lightgbm", "catboost"]
 classifiers = [
