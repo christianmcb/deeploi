@@ -10,7 +10,7 @@
 
 ## Why Deeploi?
 
-- **Instant API:** Serve your scikit-learn or XGBoost model in one command.
+- **Instant API:** Serve your scikit-learn-compatible, XGBoost, LightGBM, or CatBoost model in one command.
 - **Zero Config:** No YAML, no Docker, no cloud lock-in.
 - **Local-First:** Run on your laptop, server, or VM.
 - **Built for ML work:** Focus on the model, not the serving stack.
@@ -70,8 +70,23 @@ Core endpoints:
 
 - `POST /predict`
 - `POST /predict_proba`
+- `POST /predict-csv` (optional batch file upload)
 - `GET /meta`
 - `GET /health`
+
+Optional CSV batch prediction example:
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict-csv \
+  -F "file=@examples/iris_batch.csv"
+```
+
+For ecosystem-specific installs:
+
+```bash
+pip install "deeploi[tabular]"
+pip install "deeploi[all]"
+```
 
 ### 3. Work with a reusable package object
 
@@ -123,6 +138,10 @@ docker run --rm -p 8000:8000 iris-model
 - Data scientists who want to share a model quickly
 - ML engineers who need fast local serving for tabular models
 - Teams that want a lightweight path from notebook to API
+
+Popular tabular frameworks now include sklearn-compatible estimators (including HistGradientBoosting, ExtraTrees, and CalibratedClassifierCV), XGBoost, LightGBM, CatBoost, NGBoost, LightGBM/CatBoost rankers, and imbalanced-learn meta-estimators.
+
+Neural network support is intentionally deferred to a future release so v0.3.x stays focused on simple tabular ML workflows.
 
 ## Learn More
 

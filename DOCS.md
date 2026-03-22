@@ -75,6 +75,7 @@ Deeploi serves these endpoints:
 
 - `POST /predict`
 - `POST /predict_proba`
+- `POST /predict-csv`
 - `GET /meta`
 - `GET /health`
 - `GET /` dashboard
@@ -110,6 +111,21 @@ Typical response:
 ### `POST /predict_proba`
 
 This is available for classifiers that support `predict_proba`.
+
+### `POST /predict-csv`
+
+Optional CSV upload endpoint for batch prediction. JSON `POST /predict` remains the primary workflow.
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict-csv \
+  -F "file=@batch.csv"
+```
+
+Notes:
+
+- Requires a `.csv` file extension
+- The CSV header must match expected feature names
+- Returns the same response structure as `POST /predict`
 
 ### `GET /meta`
 
@@ -260,18 +276,105 @@ Deeploi now infers schema in this order:
 
 If none of those are available, Deeploi raises an error and you must provide `sample=...`.
 
+## Input Coercion Rules
+
+Before prediction, Deeploi validates request shape and then attempts schema-aware dtype coercion.
+
+### What Deeploi auto-converts
+
+- Numeric strings to numeric columns (for example, `"42"` to `int`, `"3.14"` to `float`)
+- Common boolean values to boolean columns
+  - Accepted examples: `true`, `false`, `"true"`, `"false"`, `"yes"`, `"no"`, `1`, `0`
+- Datetime-like strings to datetime columns (when schema dtype is datetime-like)
+- Non-null values to strings for string/object/category columns
+
+### What Deeploi does not silently fix
+
+- Missing required feature columns
+- Unexpected extra feature columns
+- Values that cannot be safely coerced to the expected dtype
+- Null values in non-nullable columns
+
+### Helpful mismatch feedback
+
+When coercion fails, Deeploi returns an explicit message in this style:
+
+```text
+Column 'sepal length (cm)' looks like 'object' with values ['five-point-one'], but model expects 'float64'. Deeploi attempted automatic coercion and failed.
+```
+
+This is designed to tell you exactly what was received and what the model expects.
+
+### Example: coercion that succeeds
+
+```json
+{
+  "records": [
+    {
+      "sepal length (cm)": "5.1",
+      "sepal width (cm)": "3.5",
+      "petal length (cm)": "1.4",
+      "petal width (cm)": "0.2"
+    }
+  ]
+}
+```
+
+For a numeric schema, Deeploi coerces these values and runs prediction normally.
+
 ## Supported Use Cases
 
 Current core support includes:
 
 - scikit-learn classifiers and regressors
+- popular sklearn-compatible estimators exposing the standard `predict` interface
+- common sklearn tree ensembles such as HistGradientBoosting and ExtraTrees
+- sklearn meta-estimators such as CalibratedClassifierCV
 - XGBoost classifiers and regressors
+- LightGBM classifiers and regressors
+- CatBoost classifiers and regressors
+- LightGBM and CatBoost rankers
+- NGBoost estimators via sklearn-compatible interface
+- imbalanced-learn meta-estimators via sklearn-compatible interface
 - pandas DataFrame-based schema inference
 - local FastAPI serving
 - save and load artifacts
 - interactive dashboard
 - optional API key protection
 - Docker file generation for artifacts
+
+Neural network frameworks are intentionally out of scope for v0.3.x to keep deployment one-line and tabular-first. They are candidates for v0.4+.
+
+## Supported Models Matrix
+
+| Family | Examples | Predict | Predict Proba | Ranker | Tested in CI |
+|---|---|---|---|---|---|
+| scikit-learn core | RandomForest, LogisticRegression | Yes | Classifiers only | No | Yes |
+| sklearn-compatible estimators | HistGradientBoosting, ExtraTrees | Yes | If model supports it | No | Yes |
+| sklearn meta-estimators | CalibratedClassifierCV | Yes | Yes | No | Yes |
+| XGBoost | XGBClassifier, XGBRegressor | Yes | Classifier yes | No | Yes |
+| LightGBM | LGBMClassifier, LGBMRegressor | Yes | Classifier yes | LGBMRanker | Yes |
+| CatBoost | CatBoostClassifier, CatBoostRegressor | Yes | Classifier yes | CatBoostRanker | Yes |
+| NGBoost | NGBClassifier, NGBRegressor | Yes | Model-dependent | No | Yes |
+| imbalanced-learn wrappers | BalancedRandomForestClassifier, EasyEnsembleClassifier | Yes | Model-dependent | No | Yes |
+
+## Optional Install Bundles
+
+Install only what you need:
+
+```bash
+pip install "deeploi[tabular]"
+pip install "deeploi[ranking]"
+pip install "deeploi[imbalanced]"
+pip install "deeploi[all]"
+```
+
+Bundle contents:
+
+- `tabular`: XGBoost, LightGBM, CatBoost, NGBoost
+- `ranking`: LightGBM, CatBoost
+- `imbalanced`: imbalanced-learn
+- `all`: tabular + ranking + imbalanced
 
 ## Requirements
 

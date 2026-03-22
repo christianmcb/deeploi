@@ -32,7 +32,10 @@ def load(path: str) -> DeeploiPackage:
         ArtifactLoadError: If artifact is corrupted or incomplete
     """
     if not os.path.isdir(path):
-        raise ArtifactLoadError(f"Artifact path does not exist: {path}")
+        raise ArtifactLoadError(
+            f"Artifact directory not found: {path}. "
+            "Pass a valid artifact directory created with pkg.save(path)."
+        )
     
     try:
         # Load manifest to verify format
@@ -46,20 +49,29 @@ def load(path: str) -> DeeploiPackage:
         # Load model
         model_path = os.path.join(path, MODEL_FILE)
         if not os.path.exists(model_path):
-            raise ArtifactLoadError(f"Model file not found: {model_path}")
+            raise ArtifactLoadError(
+                f"Missing required artifact file: {MODEL_FILE} at {model_path}. "
+                "The artifact appears incomplete. Re-save it with pkg.save(path)."
+            )
         model = load_model(model_path)
         
         # Load metadata
         metadata_path = os.path.join(path, METADATA_FILE)
         if not os.path.exists(metadata_path):
-            raise ArtifactLoadError(f"Metadata file not found: {metadata_path}")
+            raise ArtifactLoadError(
+                f"Missing required artifact file: {METADATA_FILE} at {metadata_path}. "
+                "The artifact appears incomplete. Re-save it with pkg.save(path)."
+            )
         metadata_dict = load_json(metadata_path)
         metadata = Metadata.from_dict(metadata_dict)
         
         # Load schema
         schema_path = os.path.join(path, SCHEMA_FILE)
         if not os.path.exists(schema_path):
-            raise ArtifactLoadError(f"Schema file not found: {schema_path}")
+            raise ArtifactLoadError(
+                f"Missing required artifact file: {SCHEMA_FILE} at {schema_path}. "
+                "The artifact appears incomplete. Re-save it with pkg.save(path)."
+            )
         schema_dict = load_json(schema_path)
         schema = Schema.from_dict(schema_dict)
         
@@ -73,7 +85,11 @@ def load(path: str) -> DeeploiPackage:
     except ArtifactLoadError:
         raise
     except Exception as e:
-        raise ArtifactLoadError(f"Failed to load artifact from {path}: {str(e)}")
+        raise ArtifactLoadError(
+            "Failed to load artifact from "
+            f"{path}. Ensure {MODEL_FILE}, {METADATA_FILE}, and {SCHEMA_FILE} are valid. "
+            f"Original error: {str(e)}"
+        )
 
 
 def artifact_exists(path: str) -> bool:

@@ -2,12 +2,14 @@
 Constants for Deeploi.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # Supported frameworks
 SKLEARN = "sklearn"
 XGBOOST = "xgboost"
-SUPPORTED_FRAMEWORKS = {SKLEARN, XGBOOST}
+LIGHTGBM = "lightgbm"
+CATBOOST = "catboost"
+SUPPORTED_FRAMEWORKS = {SKLEARN, XGBOOST, LIGHTGBM, CATBOOST}
 
 # Task types
 CLASSIFICATION = "classification"
@@ -19,6 +21,10 @@ SKLEARN_CLASSIFIER = "sklearn_classifier"
 SKLEARN_REGRESSOR = "sklearn_regressor"
 XGBOOST_CLASSIFIER = "xgboost_classifier"
 XGBOOST_REGRESSOR = "xgboost_regressor"
+LIGHTGBM_CLASSIFIER = "lightgbm_classifier"
+LIGHTGBM_REGRESSOR = "lightgbm_regressor"
+CATBOOST_CLASSIFIER = "catboost_classifier"
+CATBOOST_REGRESSOR = "catboost_regressor"
 
 # Artifact file names
 MODEL_FILE = "model.joblib"
@@ -44,8 +50,13 @@ HEALTH_ENDPOINT = "/health"
 METADATA_ENDPOINT = "/meta"
 PREDICT_ENDPOINT = "/predict"
 PREDICT_PROBA_ENDPOINT = "/predict_proba"
+PREDICT_CSV_ENDPOINT = "/predict-csv"
+HISTORY_ENDPOINT = "/history"
+HISTORY_SUMMARY_ENDPOINT = "/history/summary"
 
 # Package name mappings (internal name -> PyPI package name)
 PACKAGE_NAME_MAPPING = {
     "sklearn": "scikit-learn",
+    "lightgbm": "lightgbm",
+    "catboost": "catboost",
 }

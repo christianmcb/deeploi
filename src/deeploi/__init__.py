@@ -1,7 +1,7 @@
 """
 Deeploi: One-line deployment for trained tabular ML models.
 
-Simple, powerful, local-first model serving for scikit-learn and XGBoost.
+Simple, powerful, local-first model serving for scikit-learn, XGBoost, and LightGBM.
 
 Basic usage:
     from deeploi import deploy

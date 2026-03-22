@@ -3,6 +3,7 @@ Tests for FastAPI serving endpoint.
 """
 
 import pytest
+import pandas as pd
 from fastapi.testclient import TestClient
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.datasets import load_iris, load_diabetes
@@ -66,6 +67,19 @@ class TestMetadataEndpoint:
         assert data["estimator_class"] == "RandomForestClassifier"
         assert data["task_type"] == "classification"
         assert data["supports_predict_proba"] is True
+        assert data["feature_count"] == 4
+        assert isinstance(data["features"], list)
+        assert isinstance(data["dtypes"], list)
+
+    def test_metadata_includes_feature_importance_when_available(self, client):
+        """Tree-based models should expose feature importance in metadata."""
+        response = client.get("/meta")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["feature_importance"] is not None
+        assert isinstance(data["feature_importance"], dict)
+        assert len(data["feature_importance"]) == 4
 
 
 class TestPredictEndpoint:
@@ -167,6 +181,72 @@ class TestPredictEndpoint:
         assert "probabilities" in data
         assert data["probabilities"] is not None
         assert len(data["probabilities"]) == 1
+
+    def test_predict_csv_upload(self, client):
+        """Test CSV batch prediction endpoint."""
+        dataframe = pd.DataFrame(
+            [
+                {
+                    "sepal length (cm)": 5.1,
+                    "sepal width (cm)": 3.5,
+                    "petal length (cm)": 1.4,
+                    "petal width (cm)": 0.2,
+                },
+                {
+                    "sepal length (cm)": 4.9,
+                    "sepal width (cm)": 3.0,
+                    "petal length (cm)": 1.4,
+                    "petal width (cm)": 0.2,
+                },
+            ]
+        )
+        csv_content = dataframe.to_csv(index=False)
+
+        response = client.post(
+            "/predict-csv",
+            files={"file": ("iris.csv", csv_content, "text/csv")},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert "predictions" in body
+        assert len(body["predictions"]) == 2
+
+    def test_predict_csv_rejects_non_csv_extension(self, client):
+        """Only .csv uploads should be accepted for predict-csv endpoint."""
+        response = client.post(
+            "/predict-csv",
+            files={"file": ("iris.txt", "a,b\n1,2\n", "text/plain")},
+        )
+
+        assert response.status_code == 400
+        assert "Expected a .csv file" in response.json().get("detail", "")
+
+    def test_predict_csv_rejects_duplicate_header_columns(self, client):
+        """CSV files with duplicate header names should be rejected clearly."""
+        response = client.post(
+            "/predict-csv",
+            files={
+                "file": (
+                    "dup_cols.csv",
+                    "sepal length (cm),sepal length (cm),petal length (cm),petal width (cm)\n5.1,3.5,1.4,0.2\n",
+                    "text/csv",
+                )
+            },
+        )
+
+        assert response.status_code == 400
+        assert "duplicate column names" in response.json().get("detail", "")
+
+    def test_predict_csv_rejects_non_utf8_content(self, client):
+        """CSV files that cannot be decoded as UTF-8 should provide guidance."""
+        response = client.post(
+            "/predict-csv",
+            files={"file": ("bad_encoding.csv", b"\xff\xfe\x00\x00", "text/csv")},
+        )
+
+        assert response.status_code == 400
+        assert "decode CSV as UTF-8" in response.json().get("detail", "")
 
 
 class TestPredictProbaEndpoint:
@@ -278,6 +358,105 @@ class TestRegressionEndpoint:
         assert isinstance(data["predictions"][0], (int, float))
 
 
+class TestPredictionHistoryEndpoint:
+    """Test in-memory prediction request/response history endpoints."""
+
+    @pytest.fixture
+    def client(self):
+        """Create a test client."""
+        iris = load_iris(as_frame=True)
+        X, y = iris.data, iris.target
+
+        model = RandomForestClassifier(n_estimators=5, random_state=42)
+        model.fit(X, y)
+
+        pkg = package(model, X)
+        app = create_app(pkg)
+
+        return TestClient(app)
+
+    def test_history_captures_recent_predictions(self, client):
+        """Recent predict requests should be stored and returned from memory."""
+        payload = {
+            "records": [
+                {
+                    "sepal length (cm)": 5.1,
+                    "sepal width (cm)": 3.5,
+                    "petal length (cm)": 1.4,
+                    "petal width (cm)": 0.2,
+                }
+            ]
+        }
+
+        predict_response = client.post("/predict", json=payload)
+        assert predict_response.status_code == 200
+
+        history_response = client.get("/history")
+        assert history_response.status_code == 200
+
+        body = history_response.json()
+        assert body["count"] >= 1
+        assert len(body["items"]) >= 1
+
+        latest = body["items"][0]
+        assert latest["endpoint"] == "/predict"
+        assert latest["status"] == 200
+        assert latest["ok"] is True
+        assert "timestamp" in latest
+        assert "request" in latest and "records" in latest["request"]
+        assert "response" in latest and "predictions" in latest["response"]
+
+    def test_history_clear_removes_entries(self, client):
+        """Clearing server history should remove stored entries."""
+        payload = {
+            "records": [
+                {
+                    "sepal length (cm)": 5.1,
+                    "sepal width (cm)": 3.5,
+                    "petal length (cm)": 1.4,
+                    "petal width (cm)": 0.2,
+                }
+            ]
+        }
+
+        client.post("/predict", json=payload)
+        before_clear = client.get("/history").json()
+        assert before_clear["count"] >= 1
+
+        clear_response = client.delete("/history")
+        assert clear_response.status_code == 200
+        assert "cleared" in clear_response.json()
+
+        after_clear = client.get("/history").json()
+        assert after_clear["count"] == 0
+        assert after_clear["items"] == []
+
+    def test_history_summary_reports_served_and_latency(self, client):
+        """Summary endpoint should expose dashboard-friendly aggregate stats."""
+        payload = {
+            "records": [
+                {
+                    "sepal length (cm)": 5.1,
+                    "sepal width (cm)": 3.5,
+                    "petal length (cm)": 1.4,
+                    "petal width (cm)": 0.2,
+                }
+            ]
+        }
+
+        client.post("/predict", json=payload)
+        client.post("/predict", json=payload)
+
+        response = client.get("/history/summary")
+        assert response.status_code == 200
+
+        body = response.json()
+        assert body["predictions_served"] >= 2
+        assert body["successful_requests"] >= 2
+        assert body["failed_requests"] >= 0
+        assert "avg_response_time_ms" in body
+
+
 class TestAuthentication:
     """Test optional API key auth behavior."""
 
@@ -380,6 +559,62 @@ class TestAuthentication:
 
         assert response.status_code == 200
         assert '"authEnabled": true' in response.text
+
+    def test_history_requires_key_when_auth_enabled(self, base_package, payload):
+        """History endpoints are protected when auth is enabled."""
+        app = create_app(base_package, require_auth=True, api_key="secret-key")
+        client = TestClient(app)
+
+        client.post("/predict", json=payload, headers={"X-API-Key": "secret-key"})
+
+        missing_key = client.get("/history")
+        valid_key = client.get("/history", headers={"X-API-Key": "secret-key"})
+
+        assert missing_key.status_code == 401
+        assert valid_key.status_code == 200
+
+    def test_history_summary_requires_key_when_auth_enabled(self, base_package, payload):
+        """History summary endpoint is protected when auth is enabled."""
+        app = create_app(base_package, require_auth=True, api_key="secret-key")
+        client = TestClient(app)
+
+        client.post("/predict", json=payload, headers={"X-API-Key": "secret-key"})
+
+        missing_key = client.get("/history/summary")
+        valid_key = client.get("/history/summary", headers={"X-API-Key": "secret-key"})
+
+        assert missing_key.status_code == 401
+        assert valid_key.status_code == 200
+
+    def test_predict_csv_requires_key_when_auth_enabled(self, base_package):
+        """CSV upload endpoint should also be protected when auth is enabled."""
+        app = create_app(base_package, require_auth=True, api_key="secret-key")
+        client = TestClient(app)
+
+        dataframe = pd.DataFrame(
+            [
+                {
+                    "sepal length (cm)": 5.1,
+                    "sepal width (cm)": 3.5,
+                    "petal length (cm)": 1.4,
+                    "petal width (cm)": 0.2,
+                }
+            ]
+        )
+        csv_content = dataframe.to_csv(index=False)
+
+        missing_key = client.post(
+            "/predict-csv",
+            files={"file": ("iris.csv", csv_content, "text/csv")},
+        )
+        valid_key = client.post(
+            "/predict-csv",
+            files={"file": ("iris.csv", csv_content, "text/csv")},
+            headers={"X-API-Key": "secret-key"},
+        )
+
+        assert missing_key.status_code == 401
+        assert valid_key.status_code == 200
 
     def test_auth_enabled_without_key_auto_generates(self, base_package, monkeypatch):
         """Enabled auth without a key auto-generates a secure key by default."""

@@ -13,7 +13,7 @@ from deeploi.exceptions import (
     PredictionError,
 )
 from deeploi.inspector import inspect_model
-from deeploi.schema import infer_schema, validate_batch
+from deeploi.schema import infer_schema, validate_batch, coerce_dataframe_to_schema
 from deeploi.metadata import create_metadata
 from deeploi.serialization import save_model, load_model
 from deeploi.utils import (
@@ -133,9 +133,17 @@ class DeeploiPackage:
             
             # Reorder columns and select
             df = select_columns(df, self.schema.column_order)
+            # Try schema-aware dtype coercion (e.g., "42" -> 42) before prediction.
+            df = coerce_dataframe_to_schema(df, self.schema)
             
         except (InvalidSampleError, SchemaValidationError) as e:
-            raise SchemaValidationError(f"Input validation failed: {str(e)}")
+            expected_cols = ", ".join(self.schema.column_order)
+            raise SchemaValidationError(
+                "Input validation failed. "
+                f"{str(e)}. "
+                f"Expected features (in order): [{expected_cols}]. "
+                "Use GET /meta to inspect the schema."
+            )
         
         try:
             # Make predictions
@@ -162,7 +170,10 @@ class DeeploiPackage:
             return response
         
         except Exception as e:
-            raise PredictionError(f"Prediction failed: {str(e)}")
+            raise PredictionError(
+                "Prediction failed for "
+                f"{self.metadata.estimator_class}. Original error: {str(e)}"
+            )
     
     def predict_proba(
         self,
@@ -182,7 +193,8 @@ class DeeploiPackage:
         """
         if not self.metadata.supports_predict_proba:
             raise PredictionError(
-                f"Model {self.metadata.estimator_class} does not support predict_proba"
+                f"Model {self.metadata.estimator_class} does not support predict_proba. "
+                "Use predict(...) instead."
             )
         
         return self.predict(X, include_probabilities=True).to_dict()
@@ -269,11 +281,23 @@ class DeeploiPackage:
         Raises:
             ValueError: If artifact is missing required files or args are invalid
         """
-        if port <= 0:
-            raise ValueError("port must be a positive integer")
+        if not isinstance(port, int) or isinstance(port, bool) or port <= 0 or port > 65535:
+            raise ValueError(
+                "Invalid port value. Use an integer between 1 and 65535 "
+                f"(received: {port!r})."
+            )
 
         if not python_image or not isinstance(python_image, str):
-            raise ValueError("python_image must be a non-empty string")
+            raise ValueError(
+                "Invalid python_image. Provide a non-empty Docker Python tag, "
+                "for example: '3.11-slim'."
+            )
+
+        if not os.path.isdir(path):
+            raise ValueError(
+                f"Artifact directory not found: {path}. "
+                "Save an artifact first with pkg.save(path), then call generate_docker(path)."
+            )
 
         required_files = [MODEL_FILE, METADATA_FILE, SCHEMA_FILE, REQUIREMENTS_FILE]
         missing_files = [
@@ -284,8 +308,9 @@ class DeeploiPackage:
         if missing_files:
             missing = ", ".join(sorted(missing_files))
             raise ValueError(
-                f"Cannot generate Docker files. Missing artifact files: {missing}. "
-                f"Call save('{path}') first."
+                "Cannot generate Docker files. "
+                f"Artifact at {path} is missing required files: {missing}. "
+                "Re-save the artifact with pkg.save(path) before generating Docker files."
             )
 
         dockerfile_content = self._generate_dockerfile(port=port, python_image=python_image)

@@ -18,6 +18,8 @@ class Framework(str, Enum):
     """Enum for supported frameworks."""
     SKLEARN = "sklearn"
     XGBOOST = "xgboost"
+    LIGHTGBM = "lightgbm"
+    CATBOOST = "catboost"
 
 
 @dataclass

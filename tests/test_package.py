@@ -15,6 +15,7 @@ from deeploi.exceptions import (
     UnsupportedModelError,
     InvalidSampleError,
     SchemaValidationError,
+    ArtifactLoadError,
 )
 
 
@@ -177,6 +178,39 @@ class TestPrediction:
         with pytest.raises(SchemaValidationError):
             sklearn_classifier_pkg.predict([record])
 
+    def test_predict_coerces_numeric_strings(self, sklearn_classifier_pkg):
+        """Numeric strings should be auto-coerced to expected numeric dtypes."""
+        record = {
+            "sepal length (cm)": "5.1",
+            "sepal width (cm)": "3.5",
+            "petal length (cm)": "1.4",
+            "petal width (cm)": "0.2",
+        }
+
+        response = sklearn_classifier_pkg.predict([record])
+
+        assert len(response.predictions) == 1
+        assert response.predictions[0] in [0, 1, 2]
+
+    def test_predict_type_mismatch_error_includes_looks_like_vs_expects(
+        self,
+        sklearn_classifier_pkg,
+    ):
+        """Failed coercion should clearly explain actual vs expected data shape."""
+        record = {
+            "sepal length (cm)": "five-point-one",
+            "sepal width (cm)": 3.5,
+            "petal length (cm)": 1.4,
+            "petal width (cm)": 0.2,
+        }
+
+        with pytest.raises(SchemaValidationError) as excinfo:
+            sklearn_classifier_pkg.predict([record])
+
+        message = str(excinfo.value)
+        assert "looks like" in message
+        assert "but model expects" in message
+
 
 class TestSaveAndLoad:
     """Test artifact save/load functionality."""
@@ -315,3 +349,108 @@ class TestMetadata:
         assert pkg.metadata.python_version is not None
         assert pkg.metadata.created_at is not None
         assert len(pkg.metadata.library_versions) > 0
+
+
+class TestArtifactErrorMessages:
+    """Test user-friendly error messages for artifact loading failures."""
+
+    def test_load_missing_artifact_directory_has_actionable_message(self, tmp_path):
+        """Missing directory message should suggest using pkg.save(path)."""
+        missing_path = str(tmp_path / "does_not_exist")
+
+        with pytest.raises(ArtifactLoadError) as excinfo:
+            load(missing_path)
+
+        message = str(excinfo.value)
+        assert "Artifact directory not found" in message
+        assert "pkg.save(path)" in message
+
+    def test_load_missing_model_file_has_actionable_message(self, tmp_path):
+        """Incomplete artifacts should identify missing required files clearly."""
+        artifact_path = tmp_path / "incomplete_artifact"
+        artifact_path.mkdir(parents=True, exist_ok=True)
+
+        with pytest.raises(ArtifactLoadError) as excinfo:
+            load(str(artifact_path))
+
+        message = str(excinfo.value)
+        assert "Missing required artifact file: model.joblib" in message
+        assert "pkg.save(path)" in message
+
+    def test_load_corrupted_model_file_reports_deserialization_hint(self, tmp_path):
+        """Corrupted model files should raise a clear deserialization message."""
+        artifact_path = tmp_path / "corrupted_artifact"
+        artifact_path.mkdir(parents=True, exist_ok=True)
+
+        model_path = artifact_path / "model.joblib"
+        model_path.write_text("not a real joblib file")
+
+        with pytest.raises(ArtifactLoadError) as excinfo:
+            load(str(artifact_path))
+
+        message = str(excinfo.value)
+        assert "Failed to deserialize model file" in message
+        assert "may be corrupted" in message
+
+
+class TestDockerErrorMessages:
+    """Test user-friendly Docker generation validation errors."""
+
+    @pytest.fixture
+    def packaged_model(self):
+        """Create a reusable packaged model fixture."""
+        iris = load_iris(as_frame=True)
+        X, y = iris.data, iris.target
+
+        model = RandomForestClassifier(n_estimators=5, random_state=42)
+        model.fit(X, y)
+        return package(model, X)
+
+    def test_generate_docker_invalid_port_message(self, packaged_model, tmp_path):
+        """Invalid port should provide expected range and received value."""
+        artifact_path = str(tmp_path / "docker_invalid_port")
+        packaged_model.save(artifact_path)
+
+        with pytest.raises(ValueError) as excinfo:
+            packaged_model.generate_docker(artifact_path, port=0)
+
+        message = str(excinfo.value)
+        assert "Invalid port value" in message
+        assert "between 1 and 65535" in message
+
+    def test_generate_docker_invalid_python_image_message(self, packaged_model, tmp_path):
+        """Invalid image tag should include a concrete example."""
+        artifact_path = str(tmp_path / "docker_invalid_image")
+        packaged_model.save(artifact_path)
+
+        with pytest.raises(ValueError) as excinfo:
+            packaged_model.generate_docker(artifact_path, python_image="")
+
+        message = str(excinfo.value)
+        assert "Invalid python_image" in message
+        assert "3.11-slim" in message
+
+    def test_generate_docker_missing_artifact_directory_message(self, packaged_model, tmp_path):
+        """Missing artifact directory should suggest save then generate workflow."""
+        missing_path = str(tmp_path / "missing_artifact_dir")
+
+        with pytest.raises(ValueError) as excinfo:
+            packaged_model.generate_docker(missing_path)
+
+        message = str(excinfo.value)
+        assert "Artifact directory not found" in message
+        assert "pkg.save(path)" in message
+
+    def test_generate_docker_incomplete_artifact_message(self, packaged_model, tmp_path):
+        """Incomplete artifacts should clearly list missing files."""
+        artifact_path = tmp_path / "incomplete_for_docker"
+        artifact_path.mkdir(parents=True, exist_ok=True)
+        (artifact_path / "model.joblib").write_text("stub")
+
+        with pytest.raises(ValueError) as excinfo:
+            packaged_model.generate_docker(str(artifact_path))
+
+        message = str(excinfo.value)
+        assert "Cannot generate Docker files" in message
+        assert "missing required files" in message
+        assert "pkg.save(path)" in message

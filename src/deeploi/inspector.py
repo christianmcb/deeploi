@@ -5,9 +5,11 @@ Model inspection to detect type, framework, and capabilities.
 from typing import Tuple, Optional, Any
 from deeploi.exceptions import UnsupportedModelError
 from deeploi.constants import (
-    SKLEARN, XGBOOST,
+    SKLEARN, XGBOOST, LIGHTGBM, CATBOOST,
     SKLEARN_CLASSIFIER, SKLEARN_REGRESSOR,
     XGBOOST_CLASSIFIER, XGBOOST_REGRESSOR,
+    LIGHTGBM_CLASSIFIER, LIGHTGBM_REGRESSOR,
+    CATBOOST_CLASSIFIER, CATBOOST_REGRESSOR,
     CLASSIFICATION, REGRESSION
 )
 
@@ -29,7 +31,7 @@ def inspect_model(model: Any) -> Tuple[str, str, str, bool]:
 
 
 def _detect_framework(model: Any) -> str:
-    """Detect if model is sklearn or xgboost."""
+    """Detect if model is sklearn-compatible, xgboost, lightgbm, or catboost."""
     model_class = model.__class__
     module_name = model_class.__module__
     class_name = model_class.__name__
@@ -39,16 +41,39 @@ def _detect_framework(model: Any) -> str:
     for pattern in xgb_patterns:
         if pattern in class_name:
             return XGBOOST
+
+    lgbm_patterns = ["LGBM", "LGB", "LightGBM"]
+    for pattern in lgbm_patterns:
+        if pattern in class_name:
+            return LIGHTGBM
+
+    cat_patterns = ["CatBoost", "Catboost", "CATBOOST"]
+    for pattern in cat_patterns:
+        if pattern in class_name:
+            return CATBOOST
     
     # Then check module name
     if "sklearn" in module_name:
         return SKLEARN
+    elif "ngboost" in module_name:
+        # NGBoost follows the sklearn estimator interface.
+        return SKLEARN
+    elif "imblearn" in module_name:
+        # imbalanced-learn meta-estimators are sklearn-compatible wrappers.
+        return SKLEARN
     elif "xgboost" in module_name:
         return XGBOOST
+    elif "lightgbm" in module_name:
+        return LIGHTGBM
+    elif "catboost" in module_name:
+        return CATBOOST
+    # Support sklearn-compatible third-party estimators that follow the estimator contract.
+    elif hasattr(model, "_estimator_type") and hasattr(model, "predict"):
+        return SKLEARN
     
     raise UnsupportedModelError(
         f"Model framework not supported. "
-        f"Expected sklearn or xgboost, got {module_name} ({class_name})"
+        f"Expected sklearn-compatible, xgboost, lightgbm, or catboost, got {module_name} ({class_name})"
     )
 
 
@@ -81,6 +106,24 @@ def _detect_model_type(model: Any, framework: str) -> Tuple[str, str, bool]:
         else:
             task_type = REGRESSION
             return XGBOOST_REGRESSOR, task_type, False
+
+    elif framework == LIGHTGBM:
+        if is_classifier:
+            task_type = CLASSIFICATION
+            supports_proba = hasattr(model, "predict_proba")
+            return LIGHTGBM_CLASSIFIER, task_type, supports_proba
+        else:
+            task_type = REGRESSION
+            return LIGHTGBM_REGRESSOR, task_type, False
+
+    elif framework == CATBOOST:
+        if is_classifier:
+            task_type = CLASSIFICATION
+            supports_proba = hasattr(model, "predict_proba")
+            return CATBOOST_CLASSIFIER, task_type, supports_proba
+        else:
+            task_type = REGRESSION
+            return CATBOOST_REGRESSOR, task_type, False
     
     raise UnsupportedModelError(f"Unknown framework: {framework}")
 

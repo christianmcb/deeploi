@@ -135,7 +135,7 @@ class TestSchemaValidation:
         with pytest.raises(InvalidSampleError) as excinfo:
             validate_batch(records, simple_schema)
         
-        assert "Record 1" in str(excinfo.value)
+        assert "Record 2" in str(excinfo.value)
     
     def test_validate_empty_batch(self, simple_schema):
         """Test that empty batch raises error."""

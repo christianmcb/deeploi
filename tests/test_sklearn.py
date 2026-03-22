@@ -7,10 +7,13 @@ import numpy as np
 from sklearn.ensemble import (
     RandomForestClassifier, RandomForestRegressor,
     GradientBoostingClassifier,
+    HistGradientBoostingClassifier, HistGradientBoostingRegressor,
+    ExtraTreesClassifier, ExtraTreesRegressor,
 )
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.datasets import load_iris, load_diabetes
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.calibration import CalibratedClassifierCV
 
 from deeploi import package
 from deeploi.exceptions import UnsupportedModelError
@@ -22,6 +25,8 @@ class TestSklearnClassifiers:
     @pytest.mark.parametrize("classifier_class", [
         RandomForestClassifier,
         GradientBoostingClassifier,
+        HistGradientBoostingClassifier,
+        ExtraTreesClassifier,
         DecisionTreeClassifier,
         LogisticRegression,
     ])
@@ -64,12 +69,18 @@ class TestSklearnRegressors:
     
     @pytest.mark.parametrize("regressor_class", [
         RandomForestRegressor,
+        HistGradientBoostingRegressor,
+        ExtraTreesRegressor,
     ])
     def test_sklearn_regressors(self, regressor_class):
         """Test that various sklearn regressors work."""
         X, y = load_diabetes(return_X_y=True, as_frame=True)
-        
-        model = regressor_class(n_estimators=5, random_state=42)
+
+        model_kwargs = {"random_state": 42}
+        if "n_estimators" in regressor_class.__init__.__code__.co_varnames:
+            model_kwargs["n_estimators"] = 5
+
+        model = regressor_class(**model_kwargs)
         model.fit(X, y)
         
         pkg = package(model, X)
@@ -78,6 +89,29 @@ class TestSklearnRegressors:
         assert pkg.metadata.task_type == "regression"
         assert pkg.metadata.framework == "sklearn"
         assert not pkg.metadata.supports_predict_proba
+
+
+class TestSklearnMetaEstimators:
+    """Test sklearn meta-estimator support."""
+
+    def test_calibrated_classifier_cv_support(self):
+        """CalibratedClassifierCV should package and predict successfully."""
+        iris = load_iris(as_frame=True)
+        X, y = iris.data, iris.target
+
+        base = RandomForestClassifier(n_estimators=20, random_state=42)
+        model = CalibratedClassifierCV(base, cv=3)
+        model.fit(X, y)
+
+        pkg = package(model, X)
+
+        assert pkg.metadata.framework == "sklearn"
+        assert pkg.metadata.task_type == "classification"
+        assert pkg.metadata.supports_predict_proba
+
+        response = pkg.predict(X[:5], include_probabilities=True)
+        assert len(response.predictions) == 5
+        assert response.probabilities is not None
 
 
 class TestSklearnPredictions:

@@ -15,7 +15,7 @@ def get_library_versions() -> Dict[str, str]:
     """Get versions of key dependencies."""
     versions = {}
     
-    packages = ["pandas", "sklearn", "xgboost", "fastapi", "pydantic"]
+    packages = ["pandas", "sklearn", "xgboost", "lightgbm", "catboost", "fastapi", "pydantic"]
     for package_name in packages:
         try:
             if package_name == "sklearn":

@@ -125,6 +125,17 @@ dmypy.json
 # Deeploi marketing landing page (local copy)
 /index.html
 
+# Deeploi local generated artifacts (do not commit)
+/artifacts/iris_rf/model.joblib
+/artifacts/iris_rf/requirements.txt
+/artifacts/iris_rf/.dockerignore
+/artifacts/iris_rf/Dockerfile
+/artifacts/iris_rf/serve.py
+/artifacts/iris_demo/metadata.json
+
+# Local docs preview/output directory
+/docs/
+
 # IDE
 .vscode/
 .idea/

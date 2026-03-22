@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deeploi"
-version = "0.2.0"
+version = "0.3.0"
 description = "One-line deployment for trained tabular ML models"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -12,7 +12,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Christian", email = "christian@example.com"}
 ]
-keywords = ["machine-learning", "model-deployment", "api", "sklearn", "xgboost"]
+keywords = ["machine-learning", "model-deployment", "api", "sklearn", "xgboost", "lightgbm", "catboost"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -32,11 +32,34 @@ dependencies = [
     "uvicorn>=0.15.0",
     "pydantic>=1.8.0",
     "joblib>=1.0.0",
+    "python-multipart>=0.0.6",
     "scikit-learn>=0.24.0",
     "xgboost>=1.0.0",
+    "lightgbm>=3.3.0",
+    "catboost>=1.2.0",
 ]
 
 [project.optional-dependencies]
+tabular = [
+    "xgboost>=1.0.0",
+    "lightgbm>=3.3.0",
+    "catboost>=1.2.0",
+    "ngboost>=0.5.0",
+]
+ranking = [
+    "lightgbm>=3.3.0",
+    "catboost>=1.2.0",
+]
+imbalanced = [
+    "imbalanced-learn>=0.10.0",
+]
+all = [
+    "xgboost>=1.0.0",
+    "lightgbm>=3.3.0",
+    "catboost>=1.2.0",
+    "ngboost>=0.5.0",
+    "imbalanced-learn>=0.10.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",

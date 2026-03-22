@@ -391,7 +391,7 @@
         <div class="stat-card">
           <div class="stat-label">Total Predictions</div>
           <div class="stat-value" id="ov-total">0</div>
-          <div class="stat-sub">this session</div>
+          <div class="stat-sub">server memory</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Avg Latency</div>
@@ -402,6 +402,11 @@
           <div class="stat-label">Model</div>
           <div class="stat-value" id="ov-model" style="font-size:1rem;line-height:1.3">—</div>
           <div class="stat-sub" id="ov-task">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Training Rows</div>
+          <div class="stat-value" id="ov-train">—</div>
+          <div class="stat-sub" id="ov-features">feature count: —</div>
         </div>
       </div>
 
@@ -472,6 +477,7 @@ docker build -t iris-model .</pre></div>
             <div class="endpoint-selector">
               <button class="endpoint-btn active" data-endpoint="predict"><span class="method-badge badge-post">POST</span> /predict</button>
               <button class="endpoint-btn" data-endpoint="predict_proba"><span class="method-badge badge-post">POST</span> /predict_proba</button>
+              <button class="endpoint-btn" data-endpoint="predict-csv"><span class="method-badge badge-post">POST</span> /predict-csv</button>
               <button class="endpoint-btn" data-endpoint="health"><span class="method-badge badge-get">GET</span> /health</button>
               <button class="endpoint-btn" data-endpoint="meta"><span class="method-badge badge-get">GET</span> /meta</button>
             </div>
@@ -481,7 +487,7 @@ docker build -t iris-model .</pre></div>
             <div style="font-size:.75rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em">Input mode</div>
             <button class="btn btn-ghost btn-sm" id="toggle-mode-btn" onclick="toggleInputMode()">Switch to raw JSON</button>
             <button class="btn btn-ghost btn-sm" onclick="addRecord()" id="add-record-btn">＋ Add record</button>
-            <button class="btn btn-ghost btn-sm" onclick="loadSamplePayload()">Load sample</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadSamplePayload()" id="load-sample-btn">Load sample</button>
           </div>
 
           <div id="form-mode">
@@ -489,6 +495,24 @@ docker build -t iris-model .</pre></div>
           </div>
           <div id="raw-mode" style="display:none">
             <textarea class="code-editor" id="raw-json" rows="8" placeholder='{"records": [{"feature1": 1.0}]}'></textarea>
+          </div>
+          <div id="csv-mode" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">📄 CSV Upload</span>
+              </div>
+              <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+                <div>
+                  <label style="display:block;font-size:.74rem;font-weight:600;color:var(--faint);margin-bottom:6px">CSV file</label>
+                  <input id="csv-file" class="form-input" type="file" accept=".csv,text/csv" />
+                </div>
+                <label style="display:flex;align-items:center;gap:8px;font-size:.83rem;color:var(--muted)">
+                  <input id="csv-include-proba" type="checkbox" checked />
+                  Include probabilities when supported
+                </label>
+                <div style="font-size:.78rem;color:var(--faint)">Use a header row that matches the model feature names from <code>/meta</code>.</div>
+              </div>
+            </div>
           </div>
 
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -561,12 +585,25 @@ docker build -t iris-model .</pre></div>
     <div class="page" id="page-history">
       <div class="card" style="flex:1">
         <div class="card-header">
-          <span class="card-title">📋 Prediction History</span>
-          <button class="btn btn-red btn-sm" onclick="clearHistory()">Clear</button>
+          <span class="card-title">📋 Recent Predictions (Server Memory)</span>
+          <div style="display:flex;gap:8px">
+            <label for="history-limit" style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted)">
+              <span>Limit</span>
+              <select id="history-limit" class="form-input" style="width:auto;min-width:72px;padding:5px 8px" onchange="onHistoryLimitChange()">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+            </label>
+            <button class="btn btn-ghost btn-sm" onclick="fetchPredictionHistory()">↻ Reload</button>
+            <button class="btn btn-red btn-sm" onclick="clearServerHistory()">Clear</button>
+          </div>
         </div>
         <div class="card-body" style="padding:0;overflow-x:auto">
           <div id="history-table-wrap">
-            <div class="empty-state"><span class="icon">📭</span>No predictions yet. Use the Playground to send requests.</div>
+            <div class="empty-state"><span class="icon">📭</span>No predictions yet. Send requests to /predict or /predict_proba.</div>
           </div>
         </div>
       </div>
@@ -694,8 +731,8 @@ const state = {
   authEnabled: false,
   authHeaderName: 'X-API-Key',
   authKey: '',
-  meta: null, schema: null,
-  history: [], inputMode: 'form',
+  meta: null, schema: null, historySummary: null,
+  history: [], serverHistory: [], historyLimit: 50, inputMode: 'form',
   activeEndpoint: 'predict', records: [{}],
   charts: {}, rpmBuckets: {},
 };
@@ -752,7 +789,11 @@ function onBaseUrlChange() { state.baseUrl = document.getElementById('base-url')
 /* ─── API helpers ────────────────────────────────────────────────── */
 async function apiFetch(path, opts = {}) {
   const t0 = performance.now();
-  const headers = { 'Content-Type': 'application/json', ...(opts.headers||{}) };
+  const isFormData = opts.body instanceof FormData;
+  const headers = { ...(opts.headers||{}) };
+  if (!isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (state.authEnabled && state.authKey) {
     headers[state.authHeaderName] = state.authKey;
   }
@@ -784,11 +825,18 @@ function renderHealthCard(online, latency, body) {
   document.getElementById('health-content').innerHTML = online
     ? `<div style="font-size:.86rem;color:var(--muted)">Server is healthy. Response: <code style="color:var(--green)">${JSON.stringify(body)}</code> &nbsp; <strong style="color:var(--text)">${latency} ms</strong></div>`
     : `<div style="font-size:.86rem;color:var(--red)">Cannot reach <code>${state.baseUrl}</code>. Is Deeploi running?</div>`;
-  const checks = ['/health','/predict','/predict_proba','/meta'].map((p,i) => `
+  const checks = [
+    { method: 'GET', path: '/health', badgeClass: 'badge-get' },
+    { method: 'POST', path: '/predict', badgeClass: 'badge-post' },
+    { method: 'POST', path: '/predict_proba', badgeClass: 'badge-post' },
+    { method: 'POST', path: '/predict-csv', badgeClass: 'badge-post' },
+    { method: 'GET', path: '/meta', badgeClass: 'badge-get' },
+    { method: 'GET', path: '/history', badgeClass: 'badge-get' },
+  ].map((entry) => `
     <div style="display:flex;align-items:center;gap:10px;font-size:.8rem;padding:4px 0">
       <span style="color:${online?'var(--green)':'var(--faint)'}">${online?'✓':'○'}</span>
-      <span class="method-badge ${i<2?'badge-post':'badge-get'}" style="font-size:.67rem">${i<2?'POST':'GET'}</span>
-      <code style="color:var(--text)">${state.baseUrl}${p}</code>
+      <span class="method-badge ${entry.badgeClass}" style="font-size:.67rem">${entry.method}</span>
+      <code style="color:var(--text)">${state.baseUrl}${entry.path}</code>
     </div>`);
   const authLine = state.authEnabled
     ? `<div style="margin-top:10px;font-size:.78rem;color:var(--muted)">Dashboard auth is active via <code style="color:var(--accent2)">${state.authHeaderName}</code>.</div>`
@@ -802,14 +850,32 @@ async function fetchMeta() {
     const { ok, body } = await apiFetch('/meta');
     if (!ok) throw body;
     state.meta = body;
+    const classLabels = Array.isArray(body.class_labels) && body.class_labels.length
+      ? body.class_labels.join(', ')
+      : '—';
+
+    const baseRows = [
+      ['Model type', body.model_type || '—'],
+      ['Framework', body.framework || '—'],
+      ['Task type', body.task_type || '—'],
+      ['Features', body.feature_count !== undefined ? String(body.feature_count) : (body.features ? String(body.features.length) : '—')],
+      ['Training rows', body.training_set_size !== null && body.training_set_size !== undefined ? String(body.training_set_size) : 'unknown'],
+      ['Class labels', classLabels],
+      ['Deeploi ver', body.deeploi_version || '—'],
+      ['supports_proba', body.supports_predict_proba !== undefined ? String(body.supports_predict_proba) : '—'],
+    ];
+
+    const importanceHtml = renderFeatureImportance(body.feature_importance);
     document.getElementById('meta-content').innerHTML = `<table class="meta-table">
-      ${[['Model type',body.model_type||'—'],['Framework',body.framework||'—'],['Task type',body.task_type||'—'],
-         ['Features',body.features?body.features.length+' features':'—'],['Deeploi ver',body.deeploi_version||'—'],
-         ['supports_proba',body.supports_predict_proba!==undefined?String(body.supports_predict_proba):'—']]
+      ${baseRows
         .map(([k,v])=>`<tr><td>${k}</td><td><code>${v}</code></td></tr>`).join('')}
-    </table>`;
+    </table>${importanceHtml}`;
     document.getElementById('ov-model').textContent = body.model_type || '—';
     document.getElementById('ov-task').textContent  = body.task_type  || '—';
+    document.getElementById('ov-train').textContent = body.training_set_size !== null && body.training_set_size !== undefined
+      ? String(body.training_set_size)
+      : 'unknown';
+    document.getElementById('ov-features').textContent = `feature count: ${body.feature_count !== undefined ? body.feature_count : (body.features ? body.features.length : '—')}`;
     document.getElementById('ov-status').innerHTML  = `<span style="color:var(--green)">● Online</span>`;
     document.getElementById('ov-status-sub').textContent = state.baseUrl;
     if (body.features) {
@@ -818,6 +884,86 @@ async function fetchMeta() {
     }
   } catch {
     document.getElementById('meta-content').innerHTML = `<div class="empty-state"><span class="icon">⚠️</span>Could not retrieve metadata.</div>`;
+  }
+}
+
+function renderFeatureImportance(importanceMap) {
+  if (!importanceMap || typeof importanceMap !== 'object') {
+    return `<div style="margin-top:14px;font-size:.82rem;color:var(--faint)">Feature importance unavailable for this model.</div>`;
+  }
+
+  const entries = Object.entries(importanceMap)
+    .map(([name, value]) => [name, Number(value)])
+    .filter(([, value]) => Number.isFinite(value) && value >= 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (!entries.length) {
+    return `<div style="margin-top:14px;font-size:.82rem;color:var(--faint)">Feature importance unavailable for this model.</div>`;
+  }
+
+  const top = entries.slice(0, 10);
+  const maxValue = top[0][1] || 1;
+  const rows = top.map(([name, value]) => {
+    const widthPct = Math.max(2, Math.round((value / maxValue) * 100));
+    return `<div style="margin-top:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.78rem;color:var(--muted)">
+        <code style="color:var(--accent2)">${name}</code>
+        <span class="mono" style="color:var(--faint)">${value.toFixed(4)}</span>
+      </div>
+      <div style="margin-top:4px;height:8px;background:var(--bg);border:1px solid var(--border);border-radius:999px;overflow:hidden">
+        <div style="height:100%;width:${widthPct}%;background:linear-gradient(90deg,var(--accent),var(--accent3))"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div style="margin-top:16px">
+    <div style="font-size:.75rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em">Top Feature Importance</div>
+    ${rows}
+  </div>`;
+}
+
+async function fetchHistorySummary() {
+  try {
+    const { ok, body } = await apiFetch('/history/summary');
+    if (!ok) throw new Error(body.detail || 'Failed to load history summary');
+    state.historySummary = body;
+    updateOverviewStats();
+  } catch {
+    state.historySummary = null;
+    updateOverviewStats();
+  }
+}
+
+/* ─── Server history ────────────────────────────────────────────── */
+async function fetchPredictionHistory(limit = state.historyLimit) {
+  try {
+    const { ok, body } = await apiFetch(`/history?limit=${limit}`);
+    if (!ok) throw new Error(body.detail || 'Failed to load history');
+    state.serverHistory = Array.isArray(body.items) ? body.items : [];
+    renderHistoryTable();
+  } catch {
+    const wrap = document.getElementById('history-table-wrap');
+    wrap.innerHTML = `<div class="empty-state"><span class="icon">⚠️</span>Could not load server prediction history.</div>`;
+  }
+}
+
+function onHistoryLimitChange() {
+  const select = document.getElementById('history-limit');
+  const nextLimit = Number(select ? select.value : state.historyLimit);
+  state.historyLimit = Number.isFinite(nextLimit) && nextLimit > 0 ? nextLimit : 50;
+  fetchPredictionHistory();
+}
+
+async function clearServerHistory() {
+  try {
+    const { ok, body } = await apiFetch('/history', { method: 'DELETE' });
+    if (!ok) throw new Error(body.detail || 'Failed to clear history');
+    state.serverHistory = [];
+    renderHistoryTable();
+    await fetchHistorySummary();
+    toast(`Cleared ${body.cleared || 0} history item${(body.cleared || 0)===1?'':'s'}`);
+  } catch {
+    toast('Could not clear server history');
   }
 }
 
@@ -843,14 +989,20 @@ document.querySelectorAll('.endpoint-btn').forEach(btn => {
 });
 
 function updatePlaygroundUI() {
+  const isCsv = state.activeEndpoint === 'predict-csv';
   const isGet = ['health','meta'].includes(state.activeEndpoint);
-  document.getElementById('form-mode').style.display  = isGet ? 'none' : '';
-  document.getElementById('raw-mode').style.display   = (isGet || state.inputMode==='form') ? 'none' : '';
-  document.getElementById('toggle-mode-btn').style.display = isGet ? 'none' : '';
-  document.getElementById('add-record-btn').style.display  = (isGet || state.inputMode==='raw') ? 'none' : '';
+  document.getElementById('csv-mode').style.display = isCsv ? '' : 'none';
+  document.getElementById('form-mode').style.display  = (isGet || isCsv) ? 'none' : '';
+  document.getElementById('raw-mode').style.display   = (isGet || isCsv || state.inputMode==='form') ? 'none' : '';
+  document.getElementById('toggle-mode-btn').style.display = (isGet || isCsv) ? 'none' : '';
+  document.getElementById('add-record-btn').style.display  = (isGet || isCsv || state.inputMode==='raw') ? 'none' : '';
+  document.getElementById('load-sample-btn').style.display = isCsv ? 'none' : '';
 }
 
 function toggleInputMode() {
+  if (state.activeEndpoint === 'predict-csv') {
+    return;
+  }
   const btn = document.getElementById('toggle-mode-btn');
   if (state.inputMode === 'form') {
     state.inputMode = 'raw';
@@ -917,21 +1069,50 @@ function gatherPayload() {
 async function sendRequest() {
   const btn = document.getElementById('send-btn'), respBox = document.getElementById('response-box');
   const chipEl = document.getElementById('resp-status-chip'), latEl = document.getElementById('resp-latency');
+  const isCsv = state.activeEndpoint === 'predict-csv';
   const isGet = ['health','meta'].includes(state.activeEndpoint);
   btn.innerHTML = '<span class="spinner"></span> Sending…'; btn.disabled = true;
   respBox.className = 'response-box'; chipEl.innerHTML = ''; latEl.textContent = '';
   try {
-    const opts = isGet ? { method:'GET' } : { method:'POST', body: JSON.stringify(gatherPayload()) };
-    const { ok, status, body, latency } = await apiFetch('/'+state.activeEndpoint, opts);
+    let requestPath = '/' + state.activeEndpoint;
+    let requestBody = null;
+    let payloadForHistory = null;
+
+    if (isGet) {
+      requestBody = null;
+    } else if (isCsv) {
+      const fileInput = document.getElementById('csv-file');
+      const selectedFile = fileInput && fileInput.files ? fileInput.files[0] : null;
+      if (!selectedFile) {
+        throw new Error('Please choose a CSV file before sending /predict-csv request');
+      }
+      const includeProba = document.getElementById('csv-include-proba')?.checked !== false;
+      requestPath = `/predict-csv?include_probabilities=${includeProba ? 'true' : 'false'}`;
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      requestBody = formData;
+      payloadForHistory = {
+        csv_filename: selectedFile.name,
+        csv_size_bytes: selectedFile.size,
+        include_probabilities: includeProba,
+      };
+    } else {
+      payloadForHistory = gatherPayload();
+      requestBody = JSON.stringify(payloadForHistory);
+    }
+
+    const opts = isGet ? { method:'GET' } : { method:'POST', body: requestBody };
+    const { ok, status, body, latency } = await apiFetch(requestPath, opts);
     respBox.textContent = JSON.stringify(body, null, 2);
     respBox.className = 'response-box '+(ok?'success':'error');
     chipEl.innerHTML = `<span class="resp-status ${ok?'ok':'err'}">${status}</span>`;
     latEl.textContent = latency+' ms';
-    const entry = { ts: Date.now(), endpoint: state.activeEndpoint, latency, ok, status, response: body, payload: isGet?null:gatherPayload() };
+    const entry = { ts: Date.now(), endpoint: state.activeEndpoint, latency, ok, status, response: body, payload: isGet?null:payloadForHistory };
     state.history.unshift(entry);
     if (state.history.length > 200) state.history.pop();
+    await fetchPredictionHistory();
+    await fetchHistorySummary();
     if (!isGet) { updateMetrics(entry, body); renderHistoryTable(); }
-    updateOverviewStats();
   } catch(e) {
     respBox.textContent = 'Error: '+e.message+'\n\nMake sure the server is running at:\n'+state.baseUrl;
     respBox.className = 'response-box error';
@@ -987,26 +1168,35 @@ function updateMetricCards() {
 }
 
 function updateOverviewStats() {
-  const lats = state.history.filter(h=>h.latency>0).map(h=>h.latency);
-  document.getElementById('ov-total').textContent   = state.history.length;
-  document.getElementById('ov-latency').textContent = lats.length ? Math.round(lats.reduce((a,b)=>a+b,0)/lats.length)+' ms' : '—';
+  const summary = state.historySummary;
+  document.getElementById('ov-total').textContent = summary ? String(summary.predictions_served || 0) : '0';
+  document.getElementById('ov-latency').textContent = summary && summary.avg_response_time_ms !== null && summary.avg_response_time_ms !== undefined
+    ? `${summary.avg_response_time_ms} ms`
+    : '—';
 }
 
 /* ─── History ────────────────────────────────────────────────────── */
 function renderHistoryTable() {
   const wrap = document.getElementById('history-table-wrap');
-  if (!state.history.length) { wrap.innerHTML=`<div class="empty-state"><span class="icon">📭</span>No predictions yet.</div>`; return; }
-  const rows = state.history.slice(0,100).map(h => {
+  if (!state.serverHistory.length) {
+    wrap.innerHTML=`<div class="empty-state"><span class="icon">📭</span>No predictions yet. Send requests to /predict or /predict_proba.</div>`;
+    return;
+  }
+  const rows = state.serverHistory.map(h => {
     const preds = h.response&&h.response.predictions ? h.response.predictions.map(p=>`<span class="pred-chip">${p}</span>`).join(' ') : '—';
+    const reqPreview = escapeHtml(JSON.stringify(h.request || {}, null, 0));
+    const resPreview = escapeHtml(JSON.stringify(h.response || {}, null, 0));
     return `<tr>
-      <td style="color:var(--faint)">${new Date(h.ts).toLocaleTimeString()}</td>
-      <td><code style="font-size:.79rem;color:var(--accent3)">/${h.endpoint}</code></td>
+      <td style="color:var(--faint)">${new Date(h.timestamp).toLocaleTimeString()}</td>
+      <td><code style="font-size:.79rem;color:var(--accent3)">${h.endpoint}</code></td>
       <td><span class="resp-status ${h.ok?'ok':'err'}" style="font-size:.72rem">${h.status||'err'}</span></td>
       <td>${preds}</td>
-      <td style="color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.78rem">${h.latency} ms</td>
+      <td style="max-width:260px"><code style="color:var(--muted);font-size:.74rem;white-space:pre-wrap;word-break:break-word">${reqPreview}</code></td>
+      <td style="max-width:260px"><code style="color:var(--muted);font-size:.74rem;white-space:pre-wrap;word-break:break-word">${resPreview}</code></td>
+      <td style="color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.78rem">${h.latency_ms} ms</td>
     </tr>`;
   }).join('');
-  wrap.innerHTML = `<table class="history-table"><thead><tr><th>Time</th><th>Endpoint</th><th>Status</th><th>Predictions</th><th>Latency</th></tr></thead><tbody>${rows}</tbody></table>`;
+  wrap.innerHTML = `<table class="history-table"><thead><tr><th>Time</th><th>Endpoint</th><th>Status</th><th>Predictions</th><th>Request</th><th>Response</th><th>Latency</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /* ─── Clear ──────────────────────────────────────────────────────── */
@@ -1023,7 +1213,7 @@ function clearHistory() {
 /* ─── Refresh ────────────────────────────────────────────────────── */
 async function refreshAll() {
   state.baseUrl = document.getElementById('base-url').value.replace(/\/$/, '');
-  await Promise.all([checkHealth(), fetchMeta()]);
+  await Promise.all([checkHealth(), fetchMeta(), fetchPredictionHistory(), fetchHistorySummary()]);
   toast('Connected to '+state.baseUrl);
 }
 
@@ -1037,6 +1227,15 @@ function toggleDocs(header) {
 /* ─── Copy ───────────────────────────────────────────────────────── */
 function copyResponse() { navigator.clipboard.writeText(document.getElementById('response-box').textContent).then(()=>toast('Copied')); }
 function copyCode(btn)  { navigator.clipboard.writeText(btn.closest('.docs-codeblock').querySelector('pre').innerText).then(()=>toast('Copied')); }
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 /* ─── Toast ──────────────────────────────────────────────────────── */
 let toastTimer;
@@ -1056,6 +1255,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const origin = window.location.origin;
   document.getElementById('base-url').value = origin;
   state.baseUrl = origin;
+  const historyLimitSelect = document.getElementById('history-limit');
+  if (historyLimitSelect) {
+    historyLimitSelect.value = String(state.historyLimit);
+  }
   initCharts(); refreshAll(); updatePlaygroundUI();
 });
 </script>
