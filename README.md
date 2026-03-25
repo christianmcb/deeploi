@@ -1,10 +1,10 @@
 # Deeploi &mdash; Deploy ML Models in Seconds 🚀
 
-<!-- <p align="center">
+<p align="center">
   <img src="assets/deeploi_banner.png" alt="Deeploi Banner" width="700" />
-</p> -->
+</p>
 
-![Deeploi Demo](./assets/deeploi.gif)
+<!-- ![Deeploi Demo](./assets/deeploi.gif) -->
 
 [![PyPI version](https://img.shields.io/pypi/v/deeploi.svg)](https://pypi.org/project/deeploi/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
