@@ -1,14 +1,13 @@
-# Deeploi &mdash; Deploy ML Models in Seconds 🚀
-
-<p align="center">
-  <img src="assets/deeploi_banner.png" alt="Deeploi Banner" width="700" />
-</p>
-
-<!-- ![Deeploi Demo](./assets/deeploi.gif) -->
+# Deeploi &mdash; Deploy ML Models in Seconds
 
 [![PyPI version](https://img.shields.io/pypi/v/deeploi.svg)](https://pypi.org/project/deeploi/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 **Turn your trained tabular ML model into a production-ready API with a single line of code. No DevOps. No boilerplate. No headaches.**
+
+```python
+model = RandomForestClassifier(random_state=42).fit(X, y)
+deploy(model)
+```
 
 ## Why Deeploi?
 
